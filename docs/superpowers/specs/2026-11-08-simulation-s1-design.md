@@ -21,7 +21,7 @@ S1 is done when a node written like the lab 7 starter code (reads `/joint_states
 - An overhead camera modeled on the Logitech C922, with its pose, resolution, rate and field of view in config.
 - One config file (`sim.yaml`) for every adjustable value, one launch file.
 - A few sim-only helpers under `/sim/` (ball ground truth, reset).
-- A distrobox image that packages the whole environment, built after the sim passes its tests.
+- A distrobox image that holds the whole environment. It is built first; nothing is installed on the host.
 
 **Not in S1** (later stages)
 
@@ -259,7 +259,7 @@ Interface, control, grasp and reset tests are automated (`launch_testing`). Came
 
 ## 11. Distrobox packaging
 
-Built last, after section 10 passes.
+Built first, so nothing is installed on the host: every package lives in the image, and all development and tests run inside the container. The host only needs podman and distrobox. Because distrobox shares the host home, the container sets `PYTHONNOUSERSITE=1`, installs Python packages system-wide in the image, and never writes the user's dotfiles.
 
 - `docker/Containerfile`: Ubuntu 22.04 with ROS 2 Humble; apt packages for `ros-humble-ur`, `ros2_control`, `ros2_controllers`, `xacro`; MuJoCo 3.3.0; CoACD; `mujoco_ros2_control` built from source at a pinned commit; this workspace's dependencies installed with `rosdep`.
 - `docker/distrobox.ini`: one container named `maze-sim` with `nvidia=true`, created with `distrobox assemble create --file docker/distrobox.ini`.

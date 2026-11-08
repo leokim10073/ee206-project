@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- Nothing is installed on the host. Every package lives in the `maze-sim` container image (Task 0); all build, run and test commands run inside `distrobox enter maze-sim`. The host already has podman 3.4.4 and distrobox 1.8.2.5.
 - ROS 2 Humble on Ubuntu 22.04; every node runs with `use_sim_time:=true`.
 - Physics timestep 0.002 s; controller manager `update_rate: 500`.
 - `ur_type: ur7e` for `ur_description`; joint names `shoulder_pan_joint`, `shoulder_lift_joint`, `elbow_joint`, `wrist_1_joint`, `wrist_2_joint`, `wrist_3_joint`.
@@ -57,9 +58,54 @@ src/maze_sim_bringup/
   config/controllers.yaml
   test/test_interfaces.py, test_arm_control.py, test_gripper.py, test_camera.py, test_sim_tools.py
   test/lab7_style_node.py
-docker/Containerfile, docker/distrobox.ini
+docker/Containerfile, docker/distrobox.ini, docker/build.sh
 README.md
 ```
+
+---
+
+### Task 0: Distrobox environment
+
+Spec section 11, done first so nothing is installed on the host. The image grows later only by editing the Containerfile and rebuilding.
+
+**Files:**
+- Create: `docker/Containerfile`, `docker/distrobox.ini`, `docker/build.sh`
+- Modify: `README.md` (container section)
+
+**Interfaces:**
+- Produces: image `localhost/maze-sim:latest`; container `maze-sim` created with `distrobox assemble create --file docker/distrobox.ini`; inside it `ros2`, `colcon`, `xacro`, `ur_description` (`ur7e`), `ur_controllers`, `ros2_controllers`, `mujoco_ros2_control`, `mujoco_ros2_control_plugins`, Python `mujoco`, `coacd`, `trimesh`, `pytest` are available
+
+- [ ] **Step 1: Write `docker/Containerfile`**: `FROM docker.io/osrf/ros:humble-desktop`; `apt-get install` `ros-humble-ur ros-humble-ros2-control ros-humble-ros2-controllers ros-humble-xacro ros-humble-mujoco-ros2-control ros-humble-mujoco-ros2-control-plugins ros-humble-launch-testing-ament-cmake python3-pip python3-pytest libegl1 libgl1`; `pip install mujoco coacd trimesh` with versions pinned to what resolves today (record them in the file). If the two `mujoco-ros2-control` apt packages do not exist for Humble, build `https://github.com/ros-controls/mujoco_ros2_control` from source in `/opt/mujoco_ws` at a pinned tag and source it from `/etc/profile.d/`.
+- [ ] **Step 2: Write `docker/build.sh`** (`podman build -t maze-sim -f docker/Containerfile docker/`) and `docker/distrobox.ini`:
+
+```ini
+[maze-sim]
+image=localhost/maze-sim:latest
+pull=false
+nvidia=true
+init_hooks="echo 'source /opt/ros/humble/setup.bash' >> /etc/bash.bashrc"
+additional_flags="--env PYTHONNOUSERSITE=1"
+```
+
+distrobox shares the host home, so the container must not write the owner's dotfiles or `~/.local`: no `pip install --user`, no edits to `~/.bashrc`; ROS is sourced from the image's `/etc/bash.bashrc`. `PYTHONNOUSERSITE=1` stops the host's `~/.local` Python packages (the host has `mujoco` 3.3.0 there) from shadowing the image's.
+
+- [ ] **Step 3: Owner builds and creates** (in a normal terminal; rootless podman may not run inside the agent sandbox):
+
+```bash
+./docker/build.sh
+distrobox assemble create --file docker/distrobox.ini
+```
+
+- [ ] **Step 4: Verify inside the container**
+
+```bash
+distrobox enter maze-sim -- bash -lc 'ros2 pkg list | grep -E "^(ur_description|ur_controllers|mujoco_ros2_control|mujoco_ros2_control_plugins)$"; python3 -c "import mujoco, coacd, trimesh; print(mujoco.__version__)"; nvidia-smi -L'
+```
+
+Expected: the four package names, a MuJoCo version, and the GPU line.
+
+- [ ] **Step 5: README** container section: prerequisites (podman, distrobox), build, create, enter, where the workspace is (the host home is shared, so the repo path is the same inside).
+- [ ] **Step 6: Commit** `[sim] distrobox environment`
 
 ---
 
@@ -71,13 +117,7 @@ Spec section 9. Produces a findings note and stops for the owner's decision. No 
 - Create: `docs/superpowers/notes/2026-11-08-plugin-check.md`
 - Create (throwaway, not committed): a scratch workspace with the plugin demos
 
-- [ ] **Step 1: Owner installs system packages** (needs sudo; the agent sandbox cannot run sudo, so ask the owner to run this in a normal terminal)
-
-```bash
-sudo apt install ros-humble-ur ros-humble-ros2-control ros-humble-ros2-controllers ros-humble-xacro ros-humble-mujoco-ros2-control ros-humble-mujoco-ros2-control-plugins libegl1-mesa
-```
-
-If the two `mujoco-ros2-control` apt packages are not available, clone `https://github.com/ros-controls/mujoco_ros2_control` at its latest Humble-compatible tag into the scratch workspace and `colcon build` it; record the tag.
+- [ ] **Step 1: Enter the container** (`distrobox enter maze-sim`). All steps below run there. Record the `mujoco_ros2_control` version or tag Task 0 installed.
 
 - [ ] **Step 2: Check each capability** and record pass/fail with evidence (command and output) in the note:
   1. The plugin's demo launches on Humble; record the MuJoCo version it links against (the repo states testing with 3.4.0; the pip bindings here are 3.3.0).
@@ -440,27 +480,22 @@ def test_sim_time_has_no_gaps():  # /clock deltas are multiples of 0.002 s; no d
 
 ---
 
-### Task 10: Distrobox packaging
+### Task 10: Clean-container check
 
-Spec section 11. Only after Tasks 1–9 pass.
+Proves a teammate can go from a fresh clone to a running sim with only podman and distrobox on their machine.
 
 **Files:**
-- Create: `docker/Containerfile`, `docker/distrobox.ini`
-- Modify: `README.md` (container section)
+- Modify: `docker/Containerfile` (any dependency Tasks 1–9 added), `README.md`
 
-**Interfaces:**
-- Produces: container `maze-sim` created with `distrobox assemble create --file docker/distrobox.ini`; inside it `colcon build` and `ros2 launch maze_sim_bringup sim.launch.py` work
-
-- [ ] **Step 1: Write the Containerfile**: `FROM docker.io/osrf/ros:humble-desktop`; the apt packages from Task 1 (or the plugin built at the recorded tag); `pip install mujoco==<version from Task 1> coacd trimesh`; `rosdep install --from-paths src -y --ignore-src` against a copy of the `package.xml` files.
-- [ ] **Step 2: Write `distrobox.ini`** with `image=localhost/maze-sim:latest`, `nvidia=true`, `pull=false`, and a `pre_init_hooks` note that the image is built first with `podman build -t maze-sim -f docker/Containerfile .`.
-- [ ] **Step 3: Verify** on the owner's machine:
+- [ ] **Step 1: Fold dependencies in**: every package installed by hand during Tasks 1–9 goes into the Containerfile; add `rosdep install --from-paths src -y --ignore-src` against copies of the two `package.xml` files.
+- [ ] **Step 2: Rebuild from scratch and run everything** (owner, normal terminal):
 
 ```bash
-podman build -t maze-sim -f docker/Containerfile .
+distrobox rm -f maze-sim && podman rmi -f maze-sim && ./docker/build.sh
 distrobox assemble create --file docker/distrobox.ini
-distrobox enter maze-sim -- bash -lc "cd ~/Documents/UCB/eecs_106/ee206-project && colcon build && source install/setup.bash && colcon test && colcon test-result --verbose"
+distrobox enter maze-sim -- bash -lc "cd ~/Documents/UCB/eecs_106/ee206-project && rm -rf build install log && colcon build && source install/setup.bash && colcon test && colcon test-result --verbose"
 ```
 
-Expected: all tests pass inside the container; the MuJoCo viewer opens from inside it with `viewer:=true`.
-- [ ] **Step 4: README** container section: install podman and distrobox, build, create, enter, build the workspace, launch.
-- [ ] **Step 5: Commit** `[sim] distrobox environment`
+Expected: all tests pass; `ros2 launch maze_sim_bringup sim.launch.py viewer:=true` opens the MuJoCo viewer from inside the container.
+- [ ] **Step 3: Host unchanged**: `git status` shows only intended repo changes, and `ls -la ~ ~/.local/lib/python3.10/site-packages` matches a listing taken before Task 0 (no new dotfiles or user packages).
+- [ ] **Step 4: Commit** `[sim] container includes all S1 dependencies`
