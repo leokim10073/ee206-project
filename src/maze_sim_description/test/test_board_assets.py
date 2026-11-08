@@ -42,3 +42,14 @@ def test_fragment_compiles(placeholder_mm, tmp_path):
     frag = board_mjcf_fragment(a, mass=0.8, friction=(1.0, 0.005, 0.0001))
     m = mujoco.MjModel.from_xml_string(wrap_minimal_model(frag, meshdir=out))
     assert m.body("board").mass[0] == pytest.approx(0.8)
+
+
+def test_load_matches_build(placeholder_mm, tmp_path):
+    from maze_sim_description.board_assets import load_board_assets
+
+    built = build_board_assets(placeholder_mm, tmp_path / "out", units="mm")
+    loaded = load_board_assets(tmp_path / "out")
+    assert sorted(loaded.collision_meshes) == sorted(built.collision_meshes)
+    assert sorted(loaded.visual_meshes) == sorted(built.visual_meshes)
+    assert loaded.extent_m == pytest.approx(built.extent_m)
+    assert loaded.handle_center_m == pytest.approx(built.handle_center_m, abs=1e-9)

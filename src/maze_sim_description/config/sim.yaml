@@ -2,8 +2,8 @@
 # Board dimensions come from Steven's CAD; the camera pose is later matched to the real camera.
 
 camera:
-  position: [0.50, 0.00, 1.40]       # world, m
-  look_at:  [0.50, 0.00, 0.40]       # point the optical axis passes through, world, m
+  position: [0.87, 0.00, 1.40]       # world, m; above the board center
+  look_at:  [0.87, 0.00, 0.40]       # point the optical axis passes through, world, m
   up:       [1.0, 0.0, 0.0]          # world direction that appears as image "up"
   resolution: [1280, 720]
   fps: 60
@@ -11,7 +11,7 @@ camera:
 
 robot:
   ur_type: ur7e
-  initial_joints: [0.0, -1.57, 1.57, -1.57, -1.57, 0.0]   # rad; replaced by the real home pose
+  initial_joints: [0.3907, -1.7262, -2.2448, 0.8989, 1.1880, -1.5954]   # rad; tool0 at (0.45, 0, 0.40) pointing +x, wrist pitched so the board settles level in the grasp; replaced by the real home pose
 
 gripper:
   closed_position: 0.8               # fraction of full close at which fingers meet the handle
@@ -22,7 +22,7 @@ board:
   units: mm                          # units of the exported STL files
   grasp_offset:                      # handle frame relative to tool0
     xyz: [0.0, 0.0, 0.15]
-    rpy: [0.0, 0.0, 0.0]
+    rpy: [3.141593, -1.570796, 0.0]   # board x along the approach (tool0 z), board z along the finger closing axis (tool0 x)
   mass: 0.8                          # kg
   surface_friction: [1.0, 0.005, 0.0001]   # sliding, torsional, rolling
   goal_hole: {center: [0.20, 0.20], radius: 0.012}   # board frame, m
@@ -36,4 +36,4 @@ ball:
 physics:
   timestep: 0.002
   real_time_factor: 1.0              # 1.0 = wall-clock; larger runs faster if the machine allows
-  noslip_iterations: 3
+  noslip_iterations: 50             # contact-only grasp holds within 0.5° (3 lets the board pitch ~3°)

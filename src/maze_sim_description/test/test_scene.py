@@ -1,0 +1,87 @@
+import mujoco
+import numpy as np
+import pytest
+
+from maze_sim_description.scene_builder import GRIPPER_ACTUATOR, UR_JOINTS
+
+
+def _board_frame(data, p_world):
+    R = data.body("board").xmat.reshape(3, 3)
+    return R.T @ (np.asarray(p_world) - data.body("board").xpos)
+
+
+def test_compiles_with_names(model, cfg):
+    for j in UR_JOINTS:
+        model.joint(j)
+        assert model.actuator(j).trntype == mujoco.mjtTrn.mjTRN_JOINT
+        assert model.actuator(j).gaintype == mujoco.mjtGain.mjGAIN_FIXED  # motor: torque in, PIDs in ros2_control
+        assert model.actuator(j).biastype == mujoco.mjtBias.mjBIAS_NONE
+    model.joint(GRIPPER_ACTUATOR)  # tendon actuator named after its joint (plugin requirement)
+    model.actuator(GRIPPER_ACTUATOR)
+    model.camera("overhead_camera"); model.body("board"); model.body("ball"); model.site("tool0")
+    assert model.joint("ball_free").type == mujoco.mjtJoint.mjJNT_FREE
+    assert model.opt.timestep == 0.002
+    assert model.opt.cone == mujoco.mjtCone.mjCONE_ELLIPTIC
+    assert model.opt.noslip_iterations == cfg.physics.noslip_iterations
+    assert not any(model.eq_type == mujoco.mjtEq.mjEQ_WELD)  # contact-only grasp
+
+
+def test_camera_pose_from_config(model, data, cfg):
+    assert np.allclose(data.cam("overhead_camera").xpos, cfg.camera.position, atol=1e-9)
+    forward = -data.cam("overhead_camera").xmat.reshape(3, 3)[:, 2]  # MuJoCo cameras look along -z
+    want = np.subtract(cfg.camera.look_at, cfg.camera.position)
+    assert np.allclose(forward, want / np.linalg.norm(want), atol=1e-6)
+    w, h = cfg.camera.resolution
+    hfov = 2 * np.degrees(np.arctan(np.tan(np.radians(model.cam_fovy[0] / 2)) * w / h))
+    assert hfov == pytest.approx(cfg.camera.hfov_deg, abs=1e-4)  # cam_fovy is float32 in XML round-trip
+
+
+def test_start_keyframe_arm_at_initial_joints(model, data, cfg):
+    q = [data.joint(j).qpos[0] for j in UR_JOINTS]
+    assert np.allclose(q, cfg.robot.initial_joints, atol=1e-9)
+
+
+def test_start_keyframe_ball_on_board(model, data, cfg):
+    p = _board_frame(data, data.body("ball").xpos)
+    assert np.allclose(p, [*cfg.ball.start, cfg.ball.radius], atol=1e-4)
+
+
+def test_start_keyframe_board_in_grasp(model, data, cfg):
+    # the handle center sits at grasp_offset in the tool0 frame, within what the fingers give under the board's weight
+    from maze_sim_description.board_assets import load_board_assets
+    from conftest import PKG
+
+    handle = load_board_assets(PKG / "meshes" / "board").handle_center_m
+    R_b = data.body("board").xmat.reshape(3, 3)
+    h_world = data.body("board").xpos + R_b @ handle
+    R_t = data.site("tool0").xmat.reshape(3, 3)
+    h_tool = R_t.T @ (h_world - data.site("tool0").xpos)
+    assert np.allclose(h_tool, cfg.board.grasp_offset.xyz, atol=5e-3)
+    assert R_b[2, 2] > np.cos(np.radians(0.2))  # board level within 0.2°
+
+
+def test_no_arm_contact_with_board_at_start(model, data):
+    board = model.body("board").id
+    arm = {model.body(n).id for n in ("shoulder_link", "upper_arm_link", "forearm_link", "wrist_1_link", "wrist_2_link")}
+    for c in data.contact[: data.ncon]:
+        bodies = {model.geom_bodyid[c.geom1], model.geom_bodyid[c.geom2]}
+        assert not (board in bodies and bodies & arm)
+
+
+def test_write_scene(cfg, tmp_path):
+    from maze_sim_description.scene_builder import write_scene
+    from conftest import PKG
+
+    out = write_scene(cfg, PKG / "meshes" / "board", tmp_path / "scene.xml")
+    m = mujoco.MjModel.from_xml_path(str(out))
+    assert m.nkey >= 1 and m.key("start").id >= 0
+
+
+def test_write_scene_from_relative_board_dir(cfg, tmp_path, monkeypatch):
+    from maze_sim_description.scene_builder import write_scene
+    from conftest import PKG
+
+    monkeypatch.chdir(PKG)
+    out = write_scene(cfg, "meshes/board", tmp_path / "scene.xml")
+    monkeypatch.chdir(tmp_path)
+    mujoco.MjModel.from_xml_path(str(out))

@@ -86,6 +86,24 @@ def build_board_assets(src_dir, out_dir, units):
     )
 
 
+def load_board_assets(mesh_dir):
+    """BoardAssets for a directory that build_board_assets already wrote."""
+    mesh_dir = Path(mesh_dir)
+    visual = sorted(mesh_dir.glob("visual_*.obj"))
+    collision = sorted(p for p in mesh_dir.glob("*.obj") if not p.name.startswith("visual_"))
+    for required in ("visual_base.obj", "visual_handle.obj"):
+        if not (mesh_dir / required).exists():
+            raise FileNotFoundError(f"{mesh_dir / required} is missing; run build_board_assets first")
+    base = trimesh.load(mesh_dir / "visual_base.obj", force="mesh")
+    handle = trimesh.load(mesh_dir / "visual_handle.obj", force="mesh")
+    return BoardAssets(
+        visual_meshes=visual,
+        collision_meshes=collision,
+        extent_m=tuple(float(x) for x in base.extents),
+        handle_center_m=tuple(float(x) for x in handle.bounds.mean(axis=0)),
+    )
+
+
 def _plate_inertia(mass, extent):
     x, y, z = extent
     return (mass * (y * y + z * z) / 12, mass * (x * x + z * z) / 12, mass * (x * x + y * y) / 12)
