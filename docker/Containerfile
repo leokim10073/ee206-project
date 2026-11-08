@@ -1,0 +1,31 @@
+# maze-sim: everything the S1 simulation needs, so nothing is installed on the host.
+# Build: ./docker/build.sh    Use: distrobox assemble create --file docker/distrobox.ini
+FROM docker.io/osrf/ros:humble-desktop
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ros-humble-ur \
+        ros-humble-ros2-control \
+        ros-humble-ros2-controllers \
+        ros-humble-xacro \
+        ros-humble-mujoco-ros2-control \
+        ros-humble-mujoco-ros2-control-plugins \
+        ros-humble-launch-testing-ament-cmake \
+        python3-pip \
+        python3-pytest \
+        libegl1 \
+        libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# System-wide (not --user): distrobox shares the host home, so ~/.local must stay untouched.
+# mujoco is pinned to the version mujoco_ros2_control is tested against; Task 1 checks it
+# matches the MuJoCo inside ros-humble-mujoco-vendor. trimesh stays on 4.5.x because 5.x
+# needs a newer numpy than Ubuntu 22.04's 1.21, which the ROS packages are built against.
+RUN pip3 install --no-cache-dir \
+        mujoco==3.4.0 \
+        coacd==1.0.14 \
+        trimesh==4.5.3 \
+        rtree==1.3.0
+
+RUN echo 'source /opt/ros/humble/setup.bash' >> /etc/bash.bashrc
