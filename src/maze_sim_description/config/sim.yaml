@@ -11,7 +11,7 @@ camera:
 
 robot:
   ur_type: ur7e
-  initial_joints: [0.3907, -1.7262, -2.2448, 0.8989, 1.1880, -1.5954]   # rad; tool0 at (0.45, 0, 0.40) pointing +x, wrist pitched so the board settles level in the grasp; replaced by the real home pose
+  initial_joints: [-2.7502, -1.7210, -2.2471, 0.8835, 1.1847, -1.5917]   # rad; tool0 at (0.45, 0, 0.40) pointing +x, wrist pitched so the board settles level in the grasp; replaced by the real home pose
 
 gripper:
   closed_position: 0.8               # fraction of full close at which fingers meet the handle

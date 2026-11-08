@@ -48,3 +48,28 @@ def test_unknown_key_rejected(tmp_path):
     d["camera"]["postion"] = [0, 0, 1]
     with pytest.raises(ConfigError, match=r"^camera\.postion"):
         load_sim_config(write(tmp_path, d))
+
+
+def test_resolve_mesh_dir_package_uri():
+    from maze_sim_description.config import resolve_path
+
+    lookup = {"maze_sim_description": "/opt/share/maze_sim_description"}.__getitem__
+    got = resolve_path("package://maze_sim_description/meshes/board", Path("/cfg"), lookup)
+    assert got == Path("/opt/share/maze_sim_description/meshes/board")
+
+
+def test_resolve_mesh_dir_relative_to_config_file():
+    from maze_sim_description.config import resolve_path
+
+    assert resolve_path("boards/v2", Path("/home/me/cfg")) == Path("/home/me/cfg/boards/v2")
+    assert resolve_path("/abs/board", Path("/home/me/cfg")) == Path("/abs/board")
+
+
+def test_resolve_mesh_dir_unknown_package():
+    from maze_sim_description.config import resolve_path
+
+    def lookup(name):
+        raise LookupError(name)
+
+    with pytest.raises(ConfigError, match="board.mesh_dir"):
+        resolve_path("package://nope/meshes", Path("/cfg"), lookup)

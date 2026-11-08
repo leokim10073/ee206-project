@@ -88,6 +88,13 @@ def _compose(cfg, board):
         act.ctrllimited = act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
         act.ctrlrange = act.forcerange = [-limit, limit]
 
+    # Menagerie's world is the UR "base" frame; ROS world = base_link is that rotated by pi about z.
+    spec.body("base").quat = [1.0, 0.0, 0.0, 0.0]
+    for body in spec.bodies:
+        body.gravcomp = 1.0  # arm, then the gripper below: the UR controller cancels arm and tool weight
+    for joint in UR_JOINTS:
+        spec.joint(joint).actgravcomp = True
+
     flange = spec.site("attachment_site")
     spec.body("wrist_3_link").add_site(name="tool0", pos=flange.pos, quat=flange.quat)
 
@@ -101,6 +108,8 @@ def _compose(cfg, board):
     act.ctrlrange = [0.0, 0.8]
     f = cfg.gripper.force_limit * GRIPPER_TENDON_PER_NEWTON
     act.forcerange = [-f, f]
+    for body in gripper.bodies:
+        body.gravcomp = 1.0
     for geom in gripper.geoms:
         if "pad" in geom.name:
             geom.friction = cfg.board.surface_friction  # pads keep priority 1 and their stiff solref

@@ -236,3 +236,21 @@ def load_sim_config(path):
     cfg = SimConfig(**sections)
     _check_camera_geometry(cfg.camera)
     return cfg
+
+
+def _share_dir(package):
+    from ament_index_python.packages import get_package_share_directory
+
+    return get_package_share_directory(package)
+
+
+def resolve_path(value, base_dir, share_dir=_share_dir):
+    """board.mesh_dir as a filesystem path: package://<pkg>/<rest>, absolute, or relative to
+    the directory of the sim.yaml that names it."""
+    if value.startswith("package://"):
+        package, _, rest = value[len("package://"):].partition("/")
+        try:
+            return Path(share_dir(package)) / rest
+        except LookupError:
+            raise ConfigError(f"board.mesh_dir: package {package!r} not found") from None
+    return Path(base_dir) / value

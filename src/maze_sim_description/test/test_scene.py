@@ -85,3 +85,20 @@ def test_write_scene_from_relative_board_dir(cfg, tmp_path, monkeypatch):
     out = write_scene(cfg, "meshes/board", tmp_path / "scene.xml")
     monkeypatch.chdir(tmp_path)
     mujoco.MjModel.from_xml_path(str(out))
+
+
+def test_arm_and_gripper_gravity_compensated(model):
+    # the UR controller cancels the weight of the arm and its tool; ros2_control's PIDs have no gravity term
+    for j in UR_JOINTS:
+        assert model.jnt_actgravcomp[model.joint(j).id]  # counts against the joint torque limit
+    for b in ("shoulder_link", "wrist_3_link", "gripper_base", "gripper_left_pad"):
+        assert model.body_gravcomp[model.body(b).id] == 1.0
+    for b in ("board", "ball"):
+        assert model.body_gravcomp[model.body(b).id] == 0.0
+
+
+def test_world_is_ros_base_link(model):
+    # ur_description at zero joints: tool0 in base_link is (-(a2+a3), d4+d6, d1-d5) for the UR5e/UR7e
+    d = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, d)
+    np.testing.assert_allclose(d.site("tool0").xpos, [0.8172, 0.2329, 0.0628], atol=2e-3)

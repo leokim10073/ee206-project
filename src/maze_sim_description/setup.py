@@ -24,6 +24,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         ("share/" + package_name + "/meshes/board", glob("meshes/board/*")),
+        ("share/" + package_name + "/urdf", glob("urdf/*.xacro")),
         *tree("mjcf"),
     ],
     install_requires=["setuptools"],

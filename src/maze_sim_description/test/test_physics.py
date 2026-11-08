@@ -1,5 +1,6 @@
-"""Pure-MuJoCo physics checks. The arm is held by a PD loop plus gravity compensation on its
-motor actuators (the job ros2_control's PIDs do in the running sim)."""
+"""Pure-MuJoCo physics checks. The arm is held by a PD loop plus the remaining gravity and
+Coriolis torques (MuJoCo already cancels the arm and gripper weight) on its motor actuators:
+the job ros2_control's PIDs do in the running sim."""
 
 import mujoco
 import numpy as np
@@ -23,7 +24,7 @@ def _run(model, data, seconds, q_target, grip_closed=True, on_step=None):
     data.ctrl[model.actuator(GRIPPER_ACTUATOR).id] = gripper_command(model, grip_closed)
     for _ in range(int(round(seconds / model.opt.timestep))):
         qd = q_target(data.time)
-        data.ctrl[aa] = KP * (qd - data.qpos[qa]) - KD * data.qvel[da] + data.qfrc_bias[da]
+        data.ctrl[aa] = KP * (qd - data.qpos[qa]) - KD * data.qvel[da] + data.qfrc_bias[da] - data.qfrc_gravcomp[da]
         mujoco.mj_step(model, data)
         if on_step:
             on_step(data)
