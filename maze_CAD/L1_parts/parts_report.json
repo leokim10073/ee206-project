@@ -1,0 +1,256 @@
+{
+  "level": "Level 1 - Easy",
+  "frame": "origin at base-plate center, z=0 at base bottom, z up, handle on -x, units mm",
+  "files": {
+    "base.stl": {
+      "min_mm": [
+        -150.0,
+        -208.0,
+        0.0
+      ],
+      "max_mm": [
+        150.0,
+        208.0,
+        6.0
+      ],
+      "watertight": true
+    },
+    "handle.stl": {
+      "min_mm": [
+        -200.0,
+        -30.0,
+        0.0
+      ],
+      "max_mm": [
+        -150.0,
+        30.0,
+        12.0
+      ],
+      "watertight": true
+    },
+    "wall_0.stl": {
+      "min_mm": [
+        -147.0,
+        141.0,
+        6.0
+      ],
+      "max_mm": [
+        147.0,
+        147.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_1.stl": {
+      "min_mm": [
+        -147.0,
+        -147.0,
+        6.0
+      ],
+      "max_mm": [
+        147.0,
+        -141.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_2.stl": {
+      "min_mm": [
+        -147.0,
+        -147.0,
+        6.0
+      ],
+      "max_mm": [
+        -141.0,
+        147.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_3.stl": {
+      "min_mm": [
+        141.0,
+        -147.0,
+        6.0
+      ],
+      "max_mm": [
+        147.0,
+        147.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_4.stl": {
+      "min_mm": [
+        -147.0,
+        45.0,
+        6.0
+      ],
+      "max_mm": [
+        99.0,
+        51.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_5.stl": {
+      "min_mm": [
+        -99.0,
+        -51.0,
+        6.0
+      ],
+      "max_mm": [
+        147.0,
+        -45.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_6.stl": {
+      "min_mm": [
+        -3.0,
+        93.0,
+        6.0
+      ],
+      "max_mm": [
+        3.0,
+        147.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_7.stl": {
+      "min_mm": [
+        -3.0,
+        -51.0,
+        6.0
+      ],
+      "max_mm": [
+        3.0,
+        3.0,
+        24.0
+      ],
+      "watertight": true
+    },
+    "wall_8.stl": {
+      "min_mm": [
+        -3.0,
+        -99.0,
+        6.0
+      ],
+      "max_mm": [
+        3.0,
+        -45.0,
+        24.0
+      ],
+      "watertight": true
+    }
+  },
+  "goal_hole": {
+    "center_m": [
+      0.12,
+      -0.072
+    ],
+    "radius_m": 0.015,
+    "note": "printed as a 30 mm x 3 mm deep pocket; not in base.stl"
+  },
+  "ball_start_m": [
+    -0.12,
+    0.12
+  ],
+  "floor_z_mm": 6.0,
+  "handle": {
+    "center_mm": [
+      -175.0,
+      0.0,
+      6.0
+    ],
+    "size_mm": [
+      50.0,
+      60.0,
+      12.0
+    ]
+  },
+  "aruco_centers_mm": {
+    "TL": [
+      -121.0,
+      179.0,
+      6.0
+    ],
+    "TR": [
+      121.0,
+      179.0,
+      6.0
+    ],
+    "BL": [
+      -121.0,
+      -179.0,
+      6.0
+    ],
+    "BR": [
+      121.0,
+      -179.0,
+      6.0
+    ]
+  },
+  "wall_names": {
+    "wall_0": "outer_top",
+    "wall_1": "outer_bottom",
+    "wall_2": "outer_left",
+    "wall_3": "outer_right",
+    "wall_4": "h_line2_c0-4",
+    "wall_5": "h_line4_c1-5",
+    "wall_6": "v_line3_r0-0",
+    "wall_7": "v_line3_r3-3",
+    "wall_8": "v_line3_r4-4"
+  },
+  "wall_hull_check": {
+    "wall_0": {
+      "volume_mm3": 31752.0,
+      "hull_volume_mm3": 31752.0,
+      "diff_percent": 0.0
+    },
+    "wall_1": {
+      "volume_mm3": 31752.0,
+      "hull_volume_mm3": 31752.0,
+      "diff_percent": 0.0
+    },
+    "wall_2": {
+      "volume_mm3": 31752.0,
+      "hull_volume_mm3": 31752.0,
+      "diff_percent": 0.0
+    },
+    "wall_3": {
+      "volume_mm3": 31752.0,
+      "hull_volume_mm3": 31752.0,
+      "diff_percent": 0.0
+    },
+    "wall_4": {
+      "volume_mm3": 26568.0,
+      "hull_volume_mm3": 26568.0,
+      "diff_percent": 0.0
+    },
+    "wall_5": {
+      "volume_mm3": 26568.0,
+      "hull_volume_mm3": 26568.0,
+      "diff_percent": 0.0
+    },
+    "wall_6": {
+      "volume_mm3": 5832.0,
+      "hull_volume_mm3": 5832.0,
+      "diff_percent": 0.0
+    },
+    "wall_7": {
+      "volume_mm3": 5832.0,
+      "hull_volume_mm3": 5832.0,
+      "diff_percent": 0.0
+    },
+    "wall_8": {
+      "volume_mm3": 5832.0,
+      "hull_volume_mm3": 5832.0,
+      "diff_percent": 0.0
+    }
+  },
+  "narrowest_wall_gap_mm": 42.0,
+  "problems": []
+}
