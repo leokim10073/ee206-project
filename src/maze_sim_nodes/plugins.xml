@@ -1,0 +1,10 @@
+<library path="grasp_weld_plugin">
+  <class name="maze_sim_nodes/GraspWeldPlugin"
+         type="maze_sim_nodes::GraspWeldPlugin"
+         base_class_type="mujoco_ros2_control_plugins::MuJoCoROS2ControlPluginBase">
+    <description>
+      Switches the scene's grasp_weld on while the gripper is commanded closed on the board and
+      off when it opens, so a held board does not creep under MuJoCo's soft friction.
+    </description>
+  </class>
+</library>

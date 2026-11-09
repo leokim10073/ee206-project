@@ -4,7 +4,15 @@
     "visual_base.obj",
     "visual_handle.obj",
     "visual_wall_0.obj",
-    "visual_wall_1.obj"
+    "visual_wall_1.obj",
+    "visual_wall_2.obj",
+    "visual_wall_3.obj",
+    "visual_wall_4.obj",
+    "visual_wall_5.obj",
+    "visual_wall_6.obj",
+    "visual_wall_7.obj",
+    "visual_wall_8.obj",
+    "visual_wall_9.obj"
   ],
   "collision": [
     "base_000.obj",
@@ -13,8 +21,24 @@
     "base_003.obj",
     "base_004.obj",
     "base_005.obj",
+    "base_006.obj",
+    "base_007.obj",
     "handle_000.obj",
     "wall_0.obj",
-    "wall_1.obj"
+    "wall_1.obj",
+    "wall_2.obj",
+    "wall_3.obj",
+    "wall_4.obj",
+    "wall_5.obj",
+    "wall_6.obj",
+    "wall_7.obj",
+    "wall_8.obj",
+    "wall_9.obj"
+  ],
+  "markers": [
+    "aruco_BL.obj",
+    "aruco_BR.obj",
+    "aruco_TL.obj",
+    "aruco_TR.obj"
   ]
 }

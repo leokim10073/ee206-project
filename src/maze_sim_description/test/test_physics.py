@@ -1,12 +1,15 @@
 """Pure-MuJoCo physics checks. The arm is held by a PD loop plus the remaining gravity and
 Coriolis torques (MuJoCo already cancels the arm and gripper weight) on its motor actuators:
-the job ros2_control's PIDs do in the running sim."""
+the job ros2_control's PIDs do in the running sim. The grasp weld follows grasp_weld_engaged
+every step, as GraspWeldPlugin makes it in the running sim."""
 
 import mujoco
 import numpy as np
+import trimesh
 
-from maze_sim_description.placeholder_board import HOLE_CENTER
-from maze_sim_description.scene_builder import GRIPPER_ACTUATOR, UR_JOINTS, gripper_command
+from maze_sim_description.scene_builder import (
+    GRASP_WELD, GRIPPER_ACTUATOR, UR_JOINTS, grasp_weld_engaged, gripper_command,
+)
 
 KP, KD = 2000.0, 100.0
 
@@ -21,8 +24,10 @@ def _arm_ids(model):
 
 def _run(model, data, seconds, q_target, grip_closed=True, on_step=None):
     qa, da, aa = _arm_ids(model)
+    weld = model.equality(GRASP_WELD).id
     data.ctrl[model.actuator(GRIPPER_ACTUATOR).id] = gripper_command(model, grip_closed)
     for _ in range(int(round(seconds / model.opt.timestep))):
+        data.eq_active[weld] = grasp_weld_engaged(model, data, bool(data.eq_active[weld]))
         qd = q_target(data.time)
         data.ctrl[aa] = KP * (qd - data.qpos[qa]) - KD * data.qvel[da] + data.qfrc_bias[da] - data.qfrc_gravcomp[da]
         mujoco.mj_step(model, data)
@@ -82,8 +87,12 @@ def test_grasp_holds_while_arm_moves(model, data, cfg):
         worst[1] = max(worst[1], np.degrees(np.arccos(np.clip((np.trace(R0.T @ R) - 1) / 2, -1, 1))))
 
     _run(model, data, 60.0, lambda t: q0 + 0.1 * np.sin(2 * np.pi * 0.1 * t), on_step=track)
-    assert worst[0] < 1e-3, f"board slid {worst[0] * 1000:.2f} mm in the grasp"
-    assert worst[1] < 0.5, f"board rotated {worst[1]:.2f} deg in the grasp"
+    assert data.eq_active[model.equality(GRASP_WELD).id]
+    # Contacts alone let the board creep without bound (0.84° here, growing ~0.014°/s). Welded,
+    # it only flexes against the finger friction: 0.24 mm / 0.07° here, levelling off near
+    # 0.6 mm / 0.17° over 5 minutes.
+    assert worst[0] < 0.5e-3, f"board slid {worst[0] * 1000:.2f} mm in the grasp"
+    assert worst[1] < 0.15, f"board rotated {worst[1]:.3f} deg in the grasp"
 
 
 def test_finger_force_matches_limit(model, data, cfg):
@@ -110,10 +119,23 @@ def test_release_drops_board(model, data, cfg):
     assert z0 - data.body("board").xpos[2] > 0.1
 
 
+def _first_wall_toward_plus_y(xy):
+    """Inner face (board y) of the nearest wall at +y from xy, from the board's wall meshes."""
+    from conftest import PKG
+
+    faces = []
+    for p in (PKG / "meshes" / "board").glob("visual_wall_*.obj"):
+        (x0, y0, z0), (x1, _, z1) = trimesh.load(p, force="mesh").bounds
+        if x0 <= xy[0] <= x1 and y0 > xy[1] and z1 > 0.005:  # skips the goal pocket's floor disk
+            faces.append(y0)
+    return min(faces)
+
+
 def test_ball_rolls_and_walls_stop_it(model, data, cfg):
-    # wall_0 of the placeholder spans x -0.15..0.15 at y -0.155..-0.145 (board frame)
     q0 = np.array(cfg.robot.initial_joints)
-    _place_ball(model, data, (0.0, -0.20))
+    start = tuple(cfg.ball.start)
+    wall_y = _first_wall_toward_plus_y(start)
+    _place_ball(model, data, start)
     r = cfg.ball.radius
     max_y = [-1.0]
     gravity = model.opt.gravity.copy()
@@ -123,20 +145,29 @@ def test_ball_rolls_and_walls_stop_it(model, data, cfg):
              on_step=lambda d: max_y.__setitem__(0, max(max_y[0], _to_board(d, d.body("ball").xpos)[1])))
     finally:
         model.opt.gravity[:] = gravity
-    assert max_y[0] > -0.155 - r - 0.003, "ball did not roll to the wall"
-    assert max_y[0] < -0.155 - r + 1e-3, "ball passed through the wall"
+    assert max_y[0] > wall_y - r - 0.003, "ball did not roll to the wall"
+    assert max_y[0] < wall_y - r + 1e-3, "ball passed through the wall"
 
 
-def test_ball_falls_through_hole(model, data, cfg):
+def test_goal_pocket_holds_ball(model, data, cfg):
+    # the pocket must stay open after convex decomposition: the ball sinks below the floor
+    # and a tilt that rolls it across the open board keeps it inside the pocket
     q0 = np.array(cfg.robot.initial_joints)
-    hx, hy = (c / 1000 for c in HOLE_CENTER)
-    _place_ball(model, data, (hx + 0.002, hy))
-    fell = [False]
+    goal = np.array(cfg.board.goal_hole.center)
+    _place_ball(model, data, tuple(goal))
+    track = {"z": 1.0, "off": 0.0}
+
+    def on_step(d):
+        b = _to_board(d, d.body("ball").xpos)
+        track["z"] = min(track["z"], b[2])
+        if d.time > 0.5:
+            track["off"] = max(track["off"], np.linalg.norm(b[:2] - goal))
+
     gravity = model.opt.gravity.copy()
     try:
-        _tilt_gravity(model, "y", 1.0)  # toward the hole center (-x)
-        _run(model, data, 2.0, lambda t: q0,
-             on_step=lambda d: fell.__setitem__(0, fell[0] or _to_board(d, d.body("ball").xpos)[2] < -0.006))
+        _tilt_gravity(model, "y", 3.0)
+        _run(model, data, 2.0, lambda t: q0, on_step=on_step)
     finally:
         model.opt.gravity[:] = gravity
-    assert fell[0]
+    assert track["z"] < cfg.ball.radius - 0.002, "ball did not sink into the pocket"
+    assert track["off"] < cfg.board.goal_hole.radius, "ball rolled out of the pocket"

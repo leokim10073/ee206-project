@@ -37,8 +37,10 @@ def _grid_rate(fps, timestep):
 
 
 def _write_plugins(cfg, camera, path):
-    """mujoco_ros2_control plugin parameters: board and ball poses always, the camera if asked."""
+    """mujoco_ros2_control plugin parameters: the grasp weld and the board and ball poses always,
+    the camera if asked."""
     plugins = {
+        "grasp_weld": {"type": "maze_sim_nodes/GraspWeldPlugin"},  # reads its settings from the scene
         "free_joint_state_publisher": {
             "type": "mujoco_ros2_control_plugins/FreeJointStatePublisherPlugin",
             "topic": "/sim/free_joint_states",
