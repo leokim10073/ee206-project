@@ -28,7 +28,19 @@ STARTUP_STATES = {
 }
 
 
+def _refuse_leftover_sim():
+    """Launch tests share the ROS graph: a sim left over from a crashed run answers the same
+    services and publishes a second /clock, and every test after it fails in odd ways."""
+    import subprocess
+
+    found = subprocess.run(["pgrep", "-af", r"^(\S*/ros2_control_node|\S*python3 \S*/lib/maze_sim_bringup/(sim_tools|gripper)) "],
+                           capture_output=True, text=True).stdout.strip()
+    if found:
+        raise RuntimeError(f"a simulation is already running; stop it first:\n{found}")
+
+
 def sim_launch_description(**args):
+    _refuse_leftover_sim()
     sim = launch.actions.IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory("maze_sim_bringup"), "launch", "sim.launch.py")

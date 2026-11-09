@@ -125,6 +125,12 @@ def _setup(context):
             output="both",
             parameters=[{"use_sim_time": True, "config": str(config_path), "camera": camera}],
         ),
+        Node(
+            package="maze_sim_bringup",
+            executable="gripper",
+            output="both",
+            parameters=[{"use_sim_time": True}],
+        ),
     ]
     return nodes
 

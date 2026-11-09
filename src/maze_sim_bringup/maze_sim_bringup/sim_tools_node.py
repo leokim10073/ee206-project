@@ -48,6 +48,7 @@ STARTUP_STATES = {
 }
 UR_JOINTS = ("shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_1_joint", "wrist_2_joint", "wrist_3_joint")
 CALL_TIMEOUT_S = 10.0
+GRIPPER_LEAD_S = 0.05  # sim time for the close command to reach the finger actuator
 SETTLE_S = 1.0  # sim time for the arm to return to initial_joints after a reset (position PID settles in ~1 s)
 POSE_TOPICS = {"ball": "/sim/ball/pose", "board": "/sim/board/pose"}
 RATE_WINDOW_S = 5.0
@@ -152,10 +153,13 @@ class SimTools(Node):
             active = [c.name for c in states if c.name in ARM_CONTROLLERS and c.state == "active"]
             # active controllers would pull the arm back to their old targets after the reset
             self._switch([], active)
+            # Close first: if the gripper was open, a command sent after reset_world arrives a few
+            # steps late and the restored board slips out of the restored grasp in the meantime.
+            self.gripper_pub.publish(Float64MultiArray(data=[GRIPPER_CLOSED]))
+            self._sleep_sim(GRIPPER_LEAD_S)
             result = self._call(self.reset_cli, ResetWorld.Request(keyframe="start"))
             if not result.success:
                 raise RuntimeError(f"reset_world failed: {result.message}")
-            self.gripper_pub.publish(Float64MultiArray(data=[GRIPPER_CLOSED]))
             self._switch(active, [])
             # A controller holds wherever the arm is when it activates, and the arm sags a little
             # under the board while no controller runs: send its reference back to initial_joints,
