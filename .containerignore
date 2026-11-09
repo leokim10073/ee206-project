@@ -1,0 +1,3 @@
+# The image only needs the package manifests (for rosdep); the workspace is mounted by distrobox.
+*
+!src/*/package.xml

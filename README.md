@@ -110,7 +110,7 @@ Sim only, no robot equivalent:
 
 Things that differ from the robot, on purpose or by the simulator:
 
-- The camera publishes at 62.5 Hz (frames land on whole 2 ms physics steps). A slow subscriber of the 2.7 MB images can miss some (a Python subscriber gets ~56 Hz), because the publisher keeps only the newest frame.
+- The camera publishes at 62.5 Hz (frames land on whole 2 ms physics steps). A slow subscriber of the 2.7 MB images can miss some (a Python subscriber gets ~56 Hz, less on a busy machine), because the publisher keeps only the newest frame.
 - `camera_info` puts the principal point at (w/2, h/2), half a pixel off the ROS pixel-centre convention.
 - Physics and the controllers run on separate threads, so the same command sequence after `/sim/reset` gives the same ball path to within ~2 mm while the ball rolls free; after the ball hits walls, runs differ by up to ~1 cm, as on real hardware.
 

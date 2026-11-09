@@ -30,4 +30,16 @@ RUN pip3 install --no-cache-dir \
         shapely==2.0.6 \
         mapbox_earcut==1.0.2
 
-RUN echo 'source /opt/ros/humble/setup.bash' >> /etc/bash.bashrc
+# Whatever the workspace's package.xml files declare (rosdep keys -> apt), so a new dependency
+# only needs adding there.
+COPY src/maze_sim_description/package.xml /tmp/ws/src/maze_sim_description/package.xml
+COPY src/maze_sim_bringup/package.xml /tmp/ws/src/maze_sim_bringup/package.xml
+COPY src/maze_sim_nodes/package.xml /tmp/ws/src/maze_sim_nodes/package.xml
+RUN apt-get update \
+    && rosdep update --rosdistro humble \
+    && rosdep install --from-paths /tmp/ws/src --ignore-src --rosdistro humble -y \
+    && rm -rf /tmp/ws /var/lib/apt/lists/* /root/.ros
+
+# ROS in every shell: interactive ones read bash.bashrc, login ones (bash -lc ...) read profile.d.
+RUN echo 'source /opt/ros/humble/setup.bash' >> /etc/bash.bashrc \
+    && echo '. /opt/ros/humble/setup.sh' > /etc/profile.d/ros.sh
