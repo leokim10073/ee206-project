@@ -1,18 +1,24 @@
 """
-UR-aMAZE-ing  —  parametric CAD for the maze (Level 1).
-Outputs STEP (for Autodesk Inventor) and STL (for slicing).
+UR-aMAZE-ing  —  printable CAD for a maze level.
+Outputs STEP (for Autodesk Inventor) and STL (for slicing), one-piece and 4-tile.
 Coordinate system: origin = bottom-left corner of base plate (top view),
 x right, y up, z up; base bottom at z = 0.  All units mm.
 
-Run:  python3 maze_cad.py
-Change parameters in maze_params.py and re-run. Needs cadquery (not in the sim container).
+Run:  python3 maze_CAD/scripts/export_print.py --level L1     # -> maze_CAD/levels/L1/print/
+Change dimensions in maze_params.py, layouts in levels.py, and re-run.
+Needs cadquery (not in the sim container; see the README).
 """
+import argparse
 import os
-import cadquery as cq
-from maze_params import P, LEVEL1, wall_rects, cell_center, tag_pads
+import sys
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "print")
-os.makedirs(OUT, exist_ok=True)
+import cadquery as cq
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from levels import LEVELS  # noqa: E402
+from maze_params import P, wall_rects, cell_center, sticker_size, tag_pads  # noqa: E402
+
+LEVELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "levels")
 
 # split (for printers smaller than 300x300) — seams chosen to avoid the grip tab
 # and to avoid running along any wall
@@ -49,7 +55,7 @@ def build_maze(L):
     body = body.cut(box(x0, B / 2 - py / 2, -0.01, px, py, pd + 0.01))
 
     # ArUco corner pads: top surface flush with maze floor (z = base_t)
-    tsz = P["tag_marker"] + 2 * P["tag_border"] + 0.5   # +0.5 clearance for the sticker
+    tsz = sticker_size() + 0.5   # +0.5 clearance for the sticker
     for k, (x, y, S, (cx, cy)) in tag_pads().items():
         pad = box(x, y, 0, S, S, bt)
         outer = "<Y" if y < 0 else ">Y"
@@ -67,10 +73,11 @@ def build_maze(L):
     except Exception:
         pass
 
-    # start marker: engraved ring 0.6 mm deep
+    # start marker: engraved ring (a ring, not a pocket, so the ball rolls off at a small tilt)
     sx, sy = cell_center(L, L["start"])
-    ring = (cq.Workplane("XY").workplane(offset=bt - 0.6).center(sx, sy)
-            .circle(13).circle(11).extrude(0.61))
+    r_in, r_out, ring_d = P["start_ring"]
+    ring = (cq.Workplane("XY").workplane(offset=bt - ring_d).center(sx, sy)
+            .circle(r_out).circle(r_in).extrude(ring_d + 0.01))
     body = body.cut(ring)
     return body
 
@@ -132,26 +139,35 @@ def bbox_str(wp):
     return f"{bb.xlen:.1f} x {bb.ylen:.1f} x {bb.zlen:.1f}"
 
 
-if __name__ == "__main__":
-    L = LEVEL1
+def main():
+    ap = argparse.ArgumentParser(description="Printable STEP/STL for a maze level.")
+    ap.add_argument("--level", default="L1", choices=sorted(LEVELS))
+    a = ap.parse_args()
+    L, tag = LEVELS[a.level], a.level
+    out = os.path.join(LEVELS_DIR, tag, "print")
+    os.makedirs(out, exist_ok=True)
     maze = build_maze(L)
 
     # 1) one-piece version
-    cq.exporters.export(maze, f"{OUT}/maze_L1_onepiece.step")
-    cq.exporters.export(maze, f"{OUT}/maze_L1_onepiece.stl", tolerance=0.05, angularTolerance=0.1)
+    cq.exporters.export(maze, f"{out}/maze_{tag}_onepiece.step")
+    cq.exporters.export(maze, f"{out}/maze_{tag}_onepiece.stl", tolerance=0.05, angularTolerance=0.1)
     print("one-piece:", bbox_str(maze), "volume cm3 =", round(maze.val().Volume() / 1000, 1))
 
     # 2) 4-tile version
     holed = dowel_holes(maze)
     tiles = split_tiles(holed)
-    asm = cq.Assembly(name="maze_L1_tiles")
+    asm = cq.Assembly(name=f"maze_{tag}_tiles")
     for name, t in tiles.items():
-        cq.exporters.export(t, f"{OUT}/maze_L1_tile_{name}.stl", tolerance=0.05, angularTolerance=0.1)
+        cq.exporters.export(t, f"{out}/maze_{tag}_tile_{name}.stl", tolerance=0.05, angularTolerance=0.1)
         asm.add(t, name=f"tile_{name}")
         print(f"tile {name}:", bbox_str(t))
     for i, s in enumerate(splice_strips()):
-        cq.exporters.export(s, f"{OUT}/maze_L1_splice_strip_{i+1}.stl")
+        cq.exporters.export(s, f"{out}/maze_{tag}_splice_strip_{i+1}.stl")
         asm.add(s, name=f"splice_strip_{i+1}")
         print(f"strip {i+1}:", bbox_str(s))
-    asm.save(f"{OUT}/maze_L1_tiles_assembly.step")
-    print("done")
+    asm.save(f"{out}/maze_{tag}_tiles_assembly.step")
+    print("done ->", out)
+
+
+if __name__ == "__main__":
+    main()

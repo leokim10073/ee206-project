@@ -1,14 +1,14 @@
 """
-UR-aMAZE-ing maze parameters — the single source of truth for every maze export.
-Pure Python (no dependencies), imported by:
-  maze_design.py   schematic drawing (matplotlib)
-  maze_cad.py      printable STEP/STL (CadQuery)
-  export_parts.py  separate STL parts for the MuJoCo sim (trimesh + shapely)
+UR-aMAZE-ing maze: shared board dimensions and geometry helpers, the same for every level.
+Pure Python (no dependencies). Level layouts live in levels.py.
 
 Design frame ("plate frame"): origin = bottom-left corner of the 300x300 base plate
 (top view), x right, y up, z up, base bottom at z = 0. Units mm.
 Grid rows are counted from the TOP (row 0 = top), columns from the LEFT.
 The grip tab is on the -x edge.
+
+The sim export (export_sim.py) moves this to the sim frame: origin at the plate center,
+z = 0 on the maze floor.
 """
 
 P = dict(
@@ -19,7 +19,9 @@ P = dict(
     wall_h=18.0,     # wall height above the floor
     ball_d=20.0,     # ball diameter the print was sized for (sim uses its own radius)
     goal_d=30.0,     # goal pocket diameter
-    goal_depth=3.0,  # goal pocket depth
+    goal_depth=3.0,  # goal pocket depth: the ball needs a ~45 deg tilt to climb out
+    start_ring=(11.0, 13.0, 0.6),  # start marker: engraved ring (inner r, outer r, depth);
+                                   # a ring, not a pocket, so the ball rolls off at a small tilt
     handle_w=60.0,   # grip tab width (along the plate edge, y)
     handle_l=50.0,   # grip tab protrusion from the plate edge (-x)
     handle_h=12.0,   # grip tab thickness (fingers clamp its top & bottom faces)
@@ -32,19 +34,13 @@ P = dict(
     tag_recess=0.4,    # sticker locating recess depth (print only)
 )
 
-LEVEL1 = dict(
-    name="Level 1 - Easy",
-    n=6, cell=42.0,
-    # horizontal walls: (grid line j counted from the top, first col, last col)
-    h_walls=[(2, 0, 4), (4, 1, 5)],
-    # vertical walls: (grid line i counted from the left, first row, last row)
-    v_walls=[(3, 0, 0), (3, 3, 3), (3, 4, 4)],
-    # trap holes: (row, col, diameter) — through holes; none in level 1
-    holes=[],
-    start=(0, 0), goal=(4, 5),
+# ArUco markers on the four corner pads. The same four markers go on every level's board.
+# Confirm the dictionary and ids with perception before printing the stickers.
+ARUCO = dict(
+    dictionary="DICT_4X4_50",
+    ids={"TL": 0, "TR": 1, "BR": 2, "BL": 3},
+    # each marker's top edge faces board +y (away from the bottom edge in the top view)
 )
-
-LEVELS = {"L1": LEVEL1}
 
 
 def pitch(L):
@@ -90,6 +86,11 @@ def tag_pads():
     S = P["tag_pad"]; B = P["base"]
     pads = {"TL": (0, B), "TR": (B - S, B), "BL": (0, -S), "BR": (B - S, -S)}
     return {k: (x, y, S, (x + S / 2, y + S / 2)) for k, (x, y) in pads.items()}
+
+
+def sticker_size():
+    """printed sticker side: marker + white quiet zone on both sides"""
+    return P["tag_marker"] + 2 * P["tag_border"]
 
 
 def cell_center(L, rc):

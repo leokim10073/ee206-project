@@ -1,17 +1,17 @@
 {
   "level": "Level 1 - Easy",
-  "frame": "origin at base-plate center, z=0 at base bottom, z up, handle on -x, units mm",
+  "frame": "origin at base-plate center, z=0 on the maze floor (plate top), z up, handle on -x, units mm",
   "files": {
     "base.stl": {
       "min_mm": [
         -150.0,
         -208.0,
-        0.0
+        -6.0
       ],
       "max_mm": [
         150.0,
         208.0,
-        6.0
+        0.0
       ],
       "watertight": true
     },
@@ -19,12 +19,12 @@
       "min_mm": [
         -200.0,
         -30.0,
-        0.0
+        -6.0
       ],
       "max_mm": [
         -150.0,
         30.0,
-        12.0
+        6.0
       ],
       "watertight": true
     },
@@ -32,12 +32,12 @@
       "min_mm": [
         -147.0,
         141.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         147.0,
         147.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -45,12 +45,12 @@
       "min_mm": [
         -147.0,
         -147.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         147.0,
         -141.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -58,12 +58,12 @@
       "min_mm": [
         -147.0,
         -147.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         -141.0,
         147.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -71,12 +71,12 @@
       "min_mm": [
         141.0,
         -147.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         147.0,
         147.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -84,12 +84,12 @@
       "min_mm": [
         -147.0,
         45.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         99.0,
         51.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -97,12 +97,12 @@
       "min_mm": [
         -99.0,
         -51.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         147.0,
         -45.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -110,12 +110,12 @@
       "min_mm": [
         -3.0,
         93.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         3.0,
         147.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -123,12 +123,12 @@
       "min_mm": [
         -3.0,
         -51.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         3.0,
         3.0,
-        24.0
+        18.0
       ],
       "watertight": true
     },
@@ -136,12 +136,25 @@
       "min_mm": [
         -3.0,
         -99.0,
-        6.0
+        0.0
       ],
       "max_mm": [
         3.0,
         -45.0,
-        24.0
+        18.0
+      ],
+      "watertight": true
+    },
+    "wall_9.stl": {
+      "min_mm": [
+        105.0,
+        -87.0,
+        -6.0
+      ],
+      "max_mm": [
+        135.0,
+        -57.0,
+        -3.0
       ],
       "watertight": true
     }
@@ -152,18 +165,24 @@
       -0.072
     ],
     "radius_m": 0.015,
-    "note": "printed as a 30 mm x 3 mm deep pocket; not in base.stl"
+    "depth_m": 0.003,
+    "note": "a through hole in base.stl closed by the goal_pocket_floor disk (see wall_names); center and radius go in sim.yaml board.goal_hole"
   },
   "ball_start_m": [
     -0.12,
     0.12
   ],
-  "floor_z_mm": 6.0,
+  "start_ring_mm": {
+    "inner_r": 11.0,
+    "outer_r": 13.0,
+    "depth": 0.6
+  },
+  "floor_z_mm": 0.0,
   "handle": {
     "center_mm": [
       -175.0,
       0.0,
-      6.0
+      0.0
     ],
     "size_mm": [
       50.0,
@@ -171,27 +190,53 @@
       12.0
     ]
   },
-  "aruco_centers_mm": {
-    "TL": [
-      -121.0,
-      179.0,
-      6.0
-    ],
-    "TR": [
-      121.0,
-      179.0,
-      6.0
-    ],
-    "BL": [
-      -121.0,
-      -179.0,
-      6.0
-    ],
-    "BR": [
-      121.0,
-      -179.0,
-      6.0
-    ]
+  "aruco": {
+    "dictionary": "DICT_4X4_50",
+    "marker_mm": 40.0,
+    "sticker_mm": 50.0,
+    "marker_up": "+y",
+    "markers": {
+      "TL": {
+        "id": 0,
+        "center_mm": [
+          -121.0,
+          179.0,
+          0.1
+        ],
+        "obj": "aruco/aruco_TL.obj",
+        "texture": "aruco/aruco_TL.png"
+      },
+      "TR": {
+        "id": 1,
+        "center_mm": [
+          121.0,
+          179.0,
+          0.1
+        ],
+        "obj": "aruco/aruco_TR.obj",
+        "texture": "aruco/aruco_TR.png"
+      },
+      "BL": {
+        "id": 3,
+        "center_mm": [
+          -121.0,
+          -179.0,
+          0.1
+        ],
+        "obj": "aruco/aruco_BL.obj",
+        "texture": "aruco/aruco_BL.png"
+      },
+      "BR": {
+        "id": 2,
+        "center_mm": [
+          121.0,
+          -179.0,
+          0.1
+        ],
+        "obj": "aruco/aruco_BR.obj",
+        "texture": "aruco/aruco_BR.png"
+      }
+    }
   },
   "wall_names": {
     "wall_0": "outer_top",
@@ -202,7 +247,8 @@
     "wall_5": "h_line4_c1-5",
     "wall_6": "v_line3_r0-0",
     "wall_7": "v_line3_r3-3",
-    "wall_8": "v_line3_r4-4"
+    "wall_8": "v_line3_r4-4",
+    "wall_9": "goal_pocket_floor"
   },
   "wall_hull_check": {
     "wall_0": {
@@ -248,6 +294,11 @@
     "wall_8": {
       "volume_mm3": 5832.0,
       "hull_volume_mm3": 5832.0,
+      "diff_percent": 0.0
+    },
+    "wall_9": {
+      "volume_mm3": 2114.5,
+      "hull_volume_mm3": 2114.5,
       "diff_percent": 0.0
     }
   },

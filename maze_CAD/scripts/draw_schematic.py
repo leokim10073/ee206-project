@@ -1,18 +1,28 @@
 """
-UR-aMAZE-ing  maze design (v1 schematic)
-Schematic drawing; parameters live in maze_params.py. All dimensions in mm.
+UR-aMAZE-ing  maze design schematic for one level.
+Dimensions live in maze_params.py, layouts in levels.py. All dimensions in mm.
 Coordinate system: origin = bottom-left corner of base plate, x right, y up (top view).
 Rows are counted from the TOP (row 0 = top), columns from the LEFT.
-"""
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, Circle, FancyBboxPatch
-from matplotlib import font_manager as fm
 
-from maze_params import P, LEVEL1, wall_rects, tag_pads, cell_center, line_pos  # noqa: E402
+Run:  python3 maze_CAD/scripts/draw_schematic.py --level L1   # -> maze_CAD/levels/L1/schematic.png
+"""
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.patches import Rectangle, Circle  # noqa: E402
+from matplotlib import font_manager as fm  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from levels import LEVELS  # noqa: E402
+from maze_params import ARUCO, P, wall_rects, tag_pads, cell_center, line_pos, sticker_size  # noqa: E402
 
 # ---------------- drawing ----------------
 # labels are Chinese: use Noto Sans CJK if it is installed (apt: fonts-noto-cjk)
-import os
 for f in ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
           "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]:
     if os.path.exists(f):
@@ -41,29 +51,19 @@ def draw_top(ax, L):
     # finger pads (illustrative)
     ax.add_patch(Rectangle((-hl + 4, B / 2 - P["pad_y"] / 2), P["pad_x"], P["pad_y"], fc="none", ec=INK, lw=0.7, ls="--"))
     # ArUco corner pads
-    tsz = P["tag_marker"] + 2 * P["tag_border"]
+    tsz = sticker_size()
     for k, (x, y, S, (cx, cy)) in tag_pads().items():
         ax.add_patch(Rectangle((x, y), S, S, fc=BASE, ec=INK, lw=1.0))
         ax.add_patch(Rectangle((cx - tsz / 2, cy - tsz / 2), tsz, tsz, fc="white", ec=DIM, lw=0.6, ls="--"))
         ax.add_patch(Rectangle((cx - P["tag_marker"] / 2, cy - P["tag_marker"] / 2), P["tag_marker"], P["tag_marker"], fc="#222", ec="none"))
-        ax.text(cx, cy, k, ha="center", va="center", fontsize=7, color="white", weight="bold")
+        ax.text(cx, cy, f"{k}\nid {ARUCO['ids'][k]}", ha="center", va="center", fontsize=7, color="white", weight="bold")
     # base plate
     ax.add_patch(Rectangle((0, 0), B, B, fc=BASE, ec=INK, lw=1.2))
     # walls
     for (x, y, w, h) in wall_rects(L):
         ax.add_patch(Rectangle((x, y), w, h, fc=WALL, ec="none"))
-    # intended path (dashed)
-    path_cells = [(0,0),(0,1),(1,2),(1,3),(0,4),(0,5),(1,5),(2,5),(2,4),(2,3),(3,3)]
-    pts = [cell_center(L, (0, 0)), cell_center(L, (0, 2)), cell_center(L, (1, 2)), cell_center(L, (1, 4)),
-           cell_center(L, (0, 4)), cell_center(L, (0, 5)), cell_center(L, (2, 5)), cell_center(L, (2, 3)),
-           cell_center(L, (2, 2)), cell_center(L, (2, 0)), cell_center(L, (4, 0)), cell_center(L, (5, 1)),
-           cell_center(L, (5, 4)), cell_center(L, (4, 4)), cell_center(L, (4, 5))]
-    # smoother hand-tuned path through the gaps
-    pts = [cell_center(L, (0, 0)), cell_center(L, (0, 1)), cell_center(L, (1, 2)), cell_center(L, (1, 3)),
-           cell_center(L, (0, 4)), cell_center(L, (1, 5)), cell_center(L, (2, 5)), cell_center(L, (2, 4)),
-           cell_center(L, (2, 3)), cell_center(L, (2, 2)), cell_center(L, (2, 1)), cell_center(L, (3, 0)),
-           cell_center(L, (4, 0)), cell_center(L, (5, 1)), cell_center(L, (5, 2)), cell_center(L, (5, 3)),
-           cell_center(L, (5, 4)), cell_center(L, (4, 5))]
+    # intended path (dashed), from the level definition
+    pts = [cell_center(L, rc) for rc in L["path"]]
     xs, ys = zip(*pts)
     ax.plot(xs, ys, ls=(0, (4, 3)), color=PATH, lw=1.6, zorder=3)
     # start & goal
@@ -86,12 +86,12 @@ def draw_top(ax, L):
     dim_v(ax, B + 30, -S, 0, f"{S:.0f}")
     ax.text(B + 46, B + S / 2, f"ArUco {P['tag_marker']:.0f} mm\n(貼紙 {tsz:.0f}×{tsz:.0f})", fontsize=7.5, va="center", color=INK)
     x_c0 = line_pos(L, 1) + P["wall_t"]; x_c1 = line_pos(L, 2)
-    dim_h(ax, x_c0, x_c1, B + 22, "42 通道", off=0)
+    dim_h(ax, x_c0, x_c1, B + 22, f"{L['cell']:.0f} 通道", off=0)
     dim_h(ax, -P["handle_l"], 0, B / 2 - P["handle_w"] / 2 - 26, f'{P["handle_l"]:.0f}')
     dim_v(ax, -P["handle_l"] - 6, B / 2 - P["handle_w"] / 2, B / 2 + P["handle_w"] / 2, f'{P["handle_w"]:.0f}')
     ax.set_xlim(-110, B + 95); ax.set_ylim(-P["tag_pad"] - 40, B + P["tag_pad"] + 25)
     ax.set_aspect("equal"); ax.axis("off")
-    ax.set_title("俯視圖 Top view — Level 1 (Easy), 6×6 grid", fontsize=11, loc="left", color=INK)
+    ax.set_title(f"俯視圖 Top view — {L['name']}, {L['n']}×{L['n']} grid", fontsize=11, loc="left", color=INK)
 
 def draw_section(ax, L):
     B = P["base"]; bt = P["base_t"]; wh = P["wall_h"]
@@ -150,7 +150,7 @@ def draw_notes(ax):
         "• 底板 300×300×6，外框牆內距 294，牆厚 6、高 18\n"
         "• 夾取平板 50×60×12 在左側中央，夾爪側向進入、夾上下兩面\n"
         "  上下各有 1 mm 定位凹槽（36×30）防滑；三關同位置 → 姿態不必重教\n"
-        "• 起點 S 左上、終點 G 為 Ø30×3 凹槽，球到達後會被留住\n"
+        "• 起點 S 為 0.6 mm 刻環（不是凹槽，球才滾得出去）；終點 G 為 Ø30×3 凹槽，球到達後會被留住\n"
         "• 四角 ArUco 平台 58×58，頂面與迷宮地板同高（z=6），\n"
         "  有 0.4 mm 定位凹槽放 50×50 貼紙（標記 40 + 白邊 5）\n\n"
         "假設（請確認）\n"
@@ -160,13 +160,23 @@ def draw_notes(ax):
     )
     ax.text(0, 1, notes, va="top", ha="left", fontsize=8.3, color=INK, linespacing=1.55)
 
+def main():
+    ap = argparse.ArgumentParser(description="Draw the design schematic of a maze level.")
+    ap.add_argument("--level", default="L1", choices=sorted(LEVELS))
+    a = ap.parse_args()
+    L = LEVELS[a.level]
+    out = Path(__file__).resolve().parents[1] / "levels" / a.level / "schematic.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig = plt.figure(figsize=(14, 9.2), dpi=160)
+    gs = fig.add_gridspec(3, 2, width_ratios=[1.25, 1], height_ratios=[1, 0.95, 0.55], hspace=0.12, wspace=0.05)
+    ax_top = fig.add_subplot(gs[0:2, 0]); draw_top(ax_top, L)
+    ax_sec = fig.add_subplot(gs[2, 0]); draw_section(ax_sec, L)
+    ax_plan = fig.add_subplot(gs[0, 1]); draw_plan(ax_plan)
+    ax_note = fig.add_subplot(gs[1:3, 1]); draw_notes(ax_note)
+    fig.suptitle(f"UR-aMAZE-ing 迷宮設計示意圖 {a.level}   (單位 mm)", fontsize=14, x=0.02, ha="left", color=INK, weight="bold")
+    fig.savefig(out, bbox_inches="tight", facecolor="white")
+    print("->", out)
+
+
 if __name__ == "__main__":
-  fig = plt.figure(figsize=(14, 9.2), dpi=160)
-  gs = fig.add_gridspec(3, 2, width_ratios=[1.25, 1], height_ratios=[1, 0.95, 0.55], hspace=0.12, wspace=0.05)
-  ax_top = fig.add_subplot(gs[0:2, 0]); draw_top(ax_top, LEVEL1)
-  ax_sec = fig.add_subplot(gs[2, 0]); draw_section(ax_sec, LEVEL1)
-  ax_plan = fig.add_subplot(gs[0, 1]); draw_plan(ax_plan)
-  ax_note = fig.add_subplot(gs[1:3, 1]); draw_notes(ax_note)
-  fig.suptitle("UR-aMAZE-ing 迷宮設計示意圖 v1   (單位 mm)", fontsize=14, x=0.02, ha="left", color=INK, weight="bold")
-  fig.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "maze_v1_schematic.png"), bbox_inches="tight", facecolor="white")
-  print("ok")
+    main()
