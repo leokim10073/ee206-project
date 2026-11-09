@@ -151,7 +151,10 @@ def _compose(cfg, board):
         pos=cfg.camera.position,
         quat=mujoco_camera_quaternion(cfg.camera.position, cfg.camera.look_at, cfg.camera.up),
         fovy=float(np.degrees(2 * np.arctan(np.tan(hfov / 2) * h / w))),
+        resolution=[w, h],
     )
+    spec.visual.global_.offwidth = max(w, spec.visual.global_.offwidth)
+    spec.visual.global_.offheight = max(h, spec.visual.global_.offheight)
 
     return spec
 

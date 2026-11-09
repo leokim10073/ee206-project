@@ -15,6 +15,7 @@ setup(
         ("share/" + package_name + "/config", glob("config/*.yaml")),
     ],
     install_requires=["setuptools"],
+    entry_points={"console_scripts": ["sim_tools = maze_sim_bringup.sim_tools_node:main"]},
     zip_safe=True,
     maintainer="Leo Chen",
     maintainer_email="leotcchen@berkeley.edu",

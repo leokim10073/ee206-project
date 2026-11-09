@@ -66,11 +66,21 @@ def controller_states(node):
 
 
 def wait_for_startup(node):
-    """Controller states once the spawners are done (or whatever they are after STARTUP_S)."""
-    ready = lambda: (lambda s: s if all(s.get(k) == v for k, v in STARTUP_STATES.items()) else None)(
+    """Controller states once the spawners are done and sim_tools has run its start-up reset
+    (or whatever they are after STARTUP_S)."""
+    from rclpy.qos import DurabilityPolicy, QoSProfile
+    from std_msgs.msg import Empty
+
+    done = []
+    sub = node.create_subscription(
+        Empty, "/sim/reset_done", done.append, QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+    )
+    ready = lambda: done and (lambda s: s if all(s.get(k) == v for k, v in STARTUP_STATES.items()) else None)(
         controller_states(node)
     )
-    return spin_until(node, ready, STARTUP_S) or controller_states(node)
+    states = spin_until(node, ready, STARTUP_S) or controller_states(node)
+    node.destroy_subscription(sub)
+    return states
 
 
 def switch(node, activate, deactivate):
@@ -80,3 +90,29 @@ def switch(node, activate, deactivate):
     )
     result = _call(node, SwitchController, "/controller_manager/switch_controller", req)
     return bool(result and result.ok)
+
+
+def default_config():
+    from maze_sim_description.config import load_sim_config
+
+    return load_sim_config(os.path.join(get_package_share_directory("maze_sim_description"), "config", "sim.yaml"))
+
+
+def stamp(msg):
+    return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+
+def pose_matrix(pose):
+    """4x4 transform of a geometry_msgs/Pose."""
+    import numpy as np
+
+    x, y, z, w = pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w
+    R = np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
+    return T

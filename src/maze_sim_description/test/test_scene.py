@@ -102,3 +102,9 @@ def test_world_is_ros_base_link(model):
     d = mujoco.MjData(model)
     mujoco.mj_kinematics(model, d)
     np.testing.assert_allclose(d.site("tool0").xpos, [0.8172, 0.2329, 0.0628], atol=2e-3)
+
+
+def test_camera_resolution_and_offscreen_buffer(model, cfg):
+    w, h = cfg.camera.resolution
+    assert tuple(model.cam_resolution[model.camera("overhead_camera").id]) == (w, h)
+    assert model.vis.global_.offwidth >= w and model.vis.global_.offheight >= h
