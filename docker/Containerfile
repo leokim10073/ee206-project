@@ -23,8 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # mujoco matches the MuJoCo inside ros-humble-mujoco-vendor (libmujoco.so.3.12.0), so
 # Python tests and the plugin compile the scene the same way. trimesh stays on 4.5.x because 5.x
 # needs a newer numpy than Ubuntu 22.04's 1.21, which the ROS packages are built against.
+# OpenCV: Ubuntu's python3-opencv is 4.5, whose ArUco detector misses the board's markers; 4.10
+# finds them and still runs on numpy 1.21. It shadows the apt cv2 for Python only (cv_bridge's
+# C++ side keeps the system OpenCV).
 RUN pip3 install --no-cache-dir \
         mujoco==3.12.0 \
+        opencv-contrib-python-headless==4.10.0.84 \
         coacd==1.0.14 \
         trimesh==4.5.3 \
         rtree==1.3.0 \
@@ -41,6 +45,7 @@ RUN python3 /tmp/check_versions.py && rm /tmp/check_versions.py
 COPY src/maze_sim_description/package.xml /tmp/ws/src/maze_sim_description/package.xml
 COPY src/maze_sim_bringup/package.xml /tmp/ws/src/maze_sim_bringup/package.xml
 COPY src/maze_sim_nodes/package.xml /tmp/ws/src/maze_sim_nodes/package.xml
+COPY src/maze_perception/package.xml /tmp/ws/src/maze_perception/package.xml
 RUN apt-get update \
     && rosdep update --rosdistro humble \
     && rosdep install --from-paths /tmp/ws/src --ignore-src --rosdistro humble -y \

@@ -203,3 +203,45 @@ cd src/maze_sim_bringup && python3 -m pytest test
 ```
 
 The bringup tests launch the whole sim headless (about 70 s). They refuse to start while another sim is running, since it would answer the same services; stop it first. The sim's process can print a segfault on shutdown; that is an upstream `mujoco_ros2_control` bug and harmless.
+
+## Perception
+
+`maze_perception` turns the overhead camera image into board coordinates. Work package: [#23](https://github.com/leokim10073/ee206-project/issues/23). So far: P1, the board pose from the four ArUco corner markers, and a rectified top-down image of the board for mapping.
+
+The geometry is a plain Python library (`board_pose.py`, no ROS) so the later ball tracker and mapper can use it directly; `board_tracker` is the ROS node around it.
+
+### Run (inside `maze-sim`, next to the sim)
+
+```bash
+colcon build && source install/setup.bash
+ros2 launch maze_perception perception.launch.py
+```
+
+On the robot, add `use_sim_time:=false`. Look at the rectified board with `ros2 run rqt_image_view rqt_image_view /perception/board_image`.
+
+| Topic | Type | Notes |
+|---|---|---|
+| `/perception/board_pose` | `geometry_msgs/PoseStamped` | Board frame in the camera optical frame, stamped with the image; only for frames where the board was found |
+| `/perception/board_image` | `sensor_msgs/Image` | Rectified top-down image of the plate, `rgb8`, 600×600 (2 px/mm), image right = board +x, image up = board +y; 5 Hz (`rectified_rate`) |
+| `/tf` | | `camera_optical_frame` → `maze_board`, so `world` → `maze_board` comes out of TF next to the sim's `/sim/board/pose` |
+
+The board frame is the sim's and the CAD's: origin at the plate center, z up, z = 0 on the maze floor, handle on −x, m. Every 10 s the node logs frames/s, the share of frames with a board pose, and ms per frame (about 4 ms at 1280×720).
+
+[`config/perception.yaml`](src/maze_perception/config/perception.yaml) holds the marker layout (from `maze_CAD/levels/L1/sim/parts_report.json`, checked by a test), `min_markers`, the reprojection limit and the rectified image area.
+
+### Accuracy
+
+On the sim's own camera image, with the board tilted up to 6° and shifted up to 2 cm in the grasp: board position within 0.5 mm and orientation within 0.12° of `/sim/board/pose`, corners reprojected within 0.75 px.
+
+- **3 of the 4 markers are enough** (points on the board within 1 mm), so one marker hidden by the gripper is fine. With only 2 the tilt is ambiguous (up to 7° off, 6.6 mm on the board), so `min_markers` is 3.
+- **OpenCV ≥ 4.7 is needed.** Ubuntu's OpenCV 4.5 found all four markers in only 0–7 of 8 synthetic board images, depending on the color around the stickers; 4.10 found them in 8 of 8. The `maze-sim` image now installs `opencv-contrib-python-headless` 4.10, so **rebuild the container** (see [Development environment](#development-environment-distrobox)); `test_markers.py` fails in an old one.
+- `DICT_4X4_50`, 40 mm markers: at the sim camera's 1 m a marker is about 45 px wide, which 4×4 handles with margin.
+
+### Tests (inside `maze-sim`)
+
+```bash
+colcon build && source install/setup.bash
+cd src/maze_perception && python3 -m pytest test
+```
+
+`test_sim_render.py` renders the MuJoCo scene offline (no ROS) and compares against ground truth; `test_node.py` runs `board_tracker` over ROS on a synthetic image.
