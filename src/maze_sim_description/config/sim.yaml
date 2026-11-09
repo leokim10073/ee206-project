@@ -1,0 +1,39 @@
+# Every adjustable value of the maze simulation. All keys are required.
+# Board dimensions come from Steven's CAD; the camera pose is later matched to the real camera.
+
+camera:
+  position: [0.87, 0.00, 1.40]       # world, m; above the board center
+  look_at:  [0.87, 0.00, 0.40]       # point the optical axis passes through, world, m
+  up:       [1.0, 0.0, 0.0]          # world direction that appears as image "up"
+  resolution: [1280, 720]
+  fps: 60
+  hfov_deg: 70.42                    # C922 diagonal 78° at 16:9
+
+robot:
+  ur_type: ur7e
+  initial_joints: [-2.7502, -1.7210, -2.2471, 0.8835, 1.1847, -1.5917]   # rad; tool0 at (0.45, 0, 0.40) pointing +x, wrist pitched so the board settles level in the grasp; replaced by the real home pose
+
+gripper:
+  closed_position: 0.8               # fraction of full close at which fingers meet the handle
+  force_limit: 100.0                 # N
+
+board:
+  mesh_dir: package://maze_sim_description/meshes/board
+  units: mm                          # units of the exported STL files
+  grasp_offset:                      # handle frame relative to tool0
+    xyz: [0.0, 0.0, 0.15]
+    rpy: [3.141593, -1.570796, 0.0]   # board x along the approach (tool0 z), board z along the finger closing axis (tool0 x)
+  mass: 0.8                          # kg
+  surface_friction: [1.0, 0.005, 0.0001]   # sliding, torsional, rolling
+  goal_hole: {center: [0.20, 0.20], radius: 0.012}   # board frame, m
+
+ball:
+  radius: 0.007                      # m
+  mass: 0.011                        # kg
+  start: [-0.20, -0.20]              # board frame, m
+  friction: [1.0, 0.005, 0.0001]
+
+physics:
+  timestep: 0.002
+  real_time_factor: 1.0              # 1.0 = wall-clock; larger runs faster if the machine allows
+  noslip_iterations: 50             # contact-only grasp holds within 0.5° (3 lets the board pitch ~3°)

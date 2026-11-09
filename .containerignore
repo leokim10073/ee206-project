@@ -1,0 +1,5 @@
+# The image only needs the package manifests (for rosdep) and the version check; the workspace
+# is mounted by distrobox.
+*
+!src/*/package.xml
+!docker/check_versions.py

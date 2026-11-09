@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .vscode/
+MUJOCO_LOG.TXT
