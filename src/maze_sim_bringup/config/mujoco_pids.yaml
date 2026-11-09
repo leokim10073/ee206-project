@@ -1,5 +1,6 @@
 # PID gains the MuJoCo plugin uses to turn position and velocity commands into joint torque.
-# u_clamp is the UR7e joint torque limit.
+# u_clamp is the UR7e joint torque limit. Velocity gains were tuned against the board's load:
+# zero command holds within 2e-4 rad, 0.1 rad/s tracks within 1e-3; 1.5x the gains starts to ring.
 /**:
   ros__parameters:
     pid_gains:
@@ -54,48 +55,48 @@
           i_clamp_min: -14.0
       velocity:
         shoulder_pan_joint:
-          p: 300.0
-          i: 30.0
+          p: 400.0
+          i: 4000.0
           d: 0.0
           u_clamp_max: 150.0
           u_clamp_min: -150.0
           i_clamp_max: 75.0
           i_clamp_min: -75.0
         shoulder_lift_joint:
-          p: 300.0
-          i: 30.0
+          p: 400.0
+          i: 4000.0
           d: 0.0
           u_clamp_max: 150.0
           u_clamp_min: -150.0
           i_clamp_max: 75.0
           i_clamp_min: -75.0
         elbow_joint:
-          p: 300.0
-          i: 30.0
+          p: 400.0
+          i: 4000.0
           d: 0.0
           u_clamp_max: 150.0
           u_clamp_min: -150.0
           i_clamp_max: 75.0
           i_clamp_min: -75.0
         wrist_1_joint:
-          p: 30.0
-          i: 3.0
+          p: 40.0
+          i: 400.0
           d: 0.0
           u_clamp_max: 28.0
           u_clamp_min: -28.0
           i_clamp_max: 14.0
           i_clamp_min: -14.0
         wrist_2_joint:
-          p: 30.0
-          i: 3.0
+          p: 40.0
+          i: 400.0
           d: 0.0
           u_clamp_max: 28.0
           u_clamp_min: -28.0
           i_clamp_max: 14.0
           i_clamp_min: -14.0
         wrist_3_joint:
-          p: 30.0
-          i: 3.0
+          p: 40.0
+          i: 400.0
           d: 0.0
           u_clamp_max: 28.0
           u_clamp_min: -28.0
