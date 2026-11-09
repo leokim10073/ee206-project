@@ -42,7 +42,11 @@ distrobox enter maze-sim
 
 Your home directory is shared with the container, so the repo is at the same path inside. ROS 2 Humble is already sourced. The container does not write your dotfiles or `~/.local`; it sets `PYTHONNOUSERSITE=1` so Python packages from your own `~/.local` do not override the image's.
 
-After changing `docker/Containerfile`, rebuild and recreate:
+An NVIDIA GPU is used for the sim camera if present. `distrobox enter` reads your `~/.bashrc`, so an `RMW_IMPLEMENTATION` set there applies inside too; the image has both Fast DDS (the Humble default) and Cyclone DDS, and the tests pass on both. Use the same one as the robot's computer.
+
+The prompt looks the same inside and outside the container, because distrobox keeps your hostname and `~/.bashrc`. `echo ${CONTAINER_ID:-host}` prints `maze-sim` inside. Running `distrobox enter` again from inside fails with "we need a container manager".
+
+After `docker/` changes (yours or from a `git pull`), rebuild and recreate; an existing container keeps the old image:
 
 ```bash
 distrobox rm -f maze-sim && ./docker/build.sh && distrobox assemble create --file docker/distrobox.ini
@@ -58,23 +62,7 @@ A MuJoCo scene of the lab UR7e holding the maze board with its Robotiq 2F-85, pl
 
 ### Prerequisites
 
-Nothing is installed on your machine except `podman` and `distrobox`. ROS 2 Humble, MuJoCo, `mujoco_ros2_control` and every Python package live in the `maze-sim` container. distrobox shares your home directory, so the container sets `PYTHONNOUSERSITE=1` and never touches your dotfiles. An NVIDIA GPU is used for the camera if present. `distrobox enter` reads your `~/.bashrc`, so an `RMW_IMPLEMENTATION` set there applies inside too; the image has both Fast DDS (the Humble default) and Cyclone DDS, and the tests pass on both. Use the same one as the robot's computer.
-
-```bash
-./docker/build.sh                                         # build the image (once)
-distrobox assemble create --file docker/distrobox.ini     # create the maze-sim container
-distrobox enter maze-sim
-```
-
-After the image changes (a `git pull` that touches `docker/`), rebuild it and recreate the container; an existing container keeps the old image:
-
-```bash
-./docker/build.sh
-distrobox rm -f maze-sim
-distrobox assemble create --file docker/distrobox.ini
-```
-
-The prompt looks the same inside and outside the container, because distrobox keeps your hostname and `~/.bashrc`. `echo ${CONTAINER_ID:-host}` prints `maze-sim` inside. Running `distrobox enter` again from inside fails with "we need a container manager".
+The `maze-sim` container from [Development environment](#development-environment-distrobox) holds ROS 2 Humble, MuJoCo, `mujoco_ros2_control` and every Python package the sim needs.
 
 ### Build and run (inside `maze-sim`)
 
