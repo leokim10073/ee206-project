@@ -147,11 +147,13 @@ class SimTools(Node):
             return self._reset(response)
 
     def _reset(self, response):
+        released = []  # arm controllers switched off and not yet back on
         try:
             states = self._call(self.list_cli, ListControllers.Request()).controller
             active = [c.name for c in states if c.name in ARM_CONTROLLERS and c.state == "active"]
             # active controllers would pull the arm back to their old targets after the reset
             self._switch([], active)
+            released = active
             # Close first: if the gripper was open, a command sent after reset_world arrives a few
             # steps late and the restored board slips out of the restored grasp in the meantime.
             self.gripper_pub.publish(Float64MultiArray(data=[GRIPPER_CLOSED]))
@@ -160,6 +162,7 @@ class SimTools(Node):
             if not result.success:
                 raise RuntimeError(f"reset_world failed: {result.message}")
             self._switch(active, [])
+            released = []
             # A controller holds wherever the arm is when it activates, and the arm sags a little
             # under the board while no controller runs: send its reference back to initial_joints,
             # then put the ball back at rest on the level board.
@@ -168,6 +171,11 @@ class SimTools(Node):
             self._place_ball()
         except Exception as e:  # report through the service instead of killing the node
             response.success, response.message = False, str(e)
+            if released:  # a failed reset must not leave the arm sagging with no controller
+                try:
+                    self._switch(released, [])
+                except Exception as e2:
+                    response.message += f"; reactivating {released} also failed: {e2}"
             return response
         self.reset_done.publish(Empty())
         response.success, response.message = True, "reset to keyframe 'start'"

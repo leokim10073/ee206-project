@@ -151,7 +151,7 @@ Sim only, no robot equivalent:
 
 Things that differ from the robot, on purpose or by the simulator:
 
-- The camera publishes at 62.5 Hz (frames land on whole 2 ms physics steps). A slow subscriber of the 2.7 MB images can miss some (a Python subscriber gets ~56 Hz, less on a busy machine), because the publisher keeps only the newest frame.
+- The camera publishes at 62.5 Hz (frames land on whole 2 ms physics steps). A slow subscriber of the 2.7 MB images can miss some (a Python subscriber gets ~56 Hz, less on a busy machine), because the publisher keeps only the newest frame. A GPU that cannot render a frame within its slot publishes fewer (an Intel Iris Xe gets ~55 Hz in sim time), and the sim logs `camera at <x> fps (sim time), below camera.fps`.
 - `camera_info` puts the principal point at (w/2, h/2), half a pixel off the ROS pixel-centre convention.
 - Physics and the controllers run on separate threads, so the same command sequence after `/sim/reset` gives the same ball path to within ~2 mm while the ball rolls free; after the ball hits walls, runs differ by up to ~1 cm, as on real hardware.
 
@@ -163,7 +163,7 @@ MuJoCo cannot read STEP, so export the board from CAD as STL:
 |---|---|---|
 | Base plate with holes | `base.stl` | Convex-decomposed (CoACD) so the holes stay open; also the visual |
 | Handle | `handle.stl` | Convex-decomposed; the fingers grip it |
-| Each wall | `wall_<n>.stl`, one per wall | Boxes, so their convex hull is exact |
+| Each wall | `wall_<n>.stl`, one per wall | Collides as its convex hull, so each wall must be one straight box: split an L-shaped or bent wall into straight pieces, or it fills its corner |
 | Goal hole | center and radius | Typed into `sim.yaml` (`board.goal_hole`) |
 
 All parts in one shared frame: origin at the board center, z up. State the units. Then convert (inside `maze-sim`):

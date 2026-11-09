@@ -10,6 +10,7 @@ import tf2_ros
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import CameraInfo, Image
 
+from maze_sim_bringup.sim_tools_node import RATE_WINDOW_S
 from maze_sim_description.board_assets import load_board_assets
 from maze_sim_description.camera_math import look_at_quaternion, pinhole_intrinsics
 from maze_sim_description.config import resolve_path
@@ -61,17 +62,23 @@ class TestCamera(unittest.TestCase):
         self.node.destroy_subscription(sub)
         return got[-1]
 
-    def test_camera_rate(self):
+    def test_camera_rate(self, proc_output):
         img = self.one_image()
         self.assertEqual((img.width, img.height, img.encoding), (*self.cfg.camera.resolution, "rgb8"))
         rate = lambda t: (len(t) - 1) / (t[-1] - t[0])
         # Published rate: the plugin sends camera_info with every image, same stamp, and the small
-        # message is never dropped on the way here.
-        self.assertAlmostEqual(rate(self.info_window), self.cfg.camera.fps, delta=0.05 * self.cfg.camera.fps)
+        # message is never dropped on the way here. A GPU too slow to render each frame within its
+        # slot (e.g. Intel Iris Xe: ~55 Hz for 60) is a hardware limit, not a bug, but must not pass
+        # silently: then the sim has to say so.
+        published = rate(self.info_window)
+        if published < 0.95 * self.cfg.camera.fps:
+            proc_output.assertWaitFor("below camera.fps", timeout=3 * RATE_WINDOW_S)
+        else:
+            self.assertAlmostEqual(published, self.cfg.camera.fps, delta=0.05 * self.cfg.camera.fps)
         # Received rate: the image publisher keeps only the newest frame (depth 1), so a subscriber
         # that is slow to take a 2.7 MB frame loses some. A Python one gets ~93% on an idle machine
         # and ~85% while colcon runs other tests, so this only checks that images arrive steadily.
-        self.assertGreater(rate(self.image_window), 0.5 * self.cfg.camera.fps)
+        self.assertGreater(rate(self.image_window), 0.5 * published)
 
     def test_camera_info_matches(self):
         spin_until(self.node, lambda: self.infos, 5.0)
