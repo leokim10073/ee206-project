@@ -182,7 +182,12 @@ def _compose(cfg, board):
     )
 
     spec.worldbody.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[3, 3, 0.05], rgba=[0.5, 0.5, 0.5, 1])
+    # Room light from above, specular kept so the steel ball shows a highlight; the camera-side
+    # headlight dimmed and without specular, or the lit board clips (test_render)
     spec.worldbody.add_light(pos=[0.5, 0, 3], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL)
+    spec.visual.headlight.ambient = [0.1, 0.1, 0.1]
+    spec.visual.headlight.diffuse = [0.2, 0.2, 0.2]
+    spec.visual.headlight.specular = [0.0, 0.0, 0.0]
 
     w, h = cfg.camera.resolution
     hfov = np.radians(cfg.camera.hfov_deg)

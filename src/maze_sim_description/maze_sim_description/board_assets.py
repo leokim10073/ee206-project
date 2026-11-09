@@ -165,11 +165,12 @@ def board_mjcf_fragment(assets, mass, friction):
     """<asset> and <worldbody> with a free body "board": visual geoms (group 1, no contact)
     and one collision geom per convex piece (group 3), plus the textured markers (group 1, no
     contact). Mesh files resolve against meshdir, marker textures against texturedir."""
-    assets_xml, geoms = [], []
+    # wood and paper are matte: without specular="0" the overhead light glares white off them
+    assets_xml, geoms = ['<material name="board_wood" rgba="0.82 0.72 0.55 1" specular="0"/>'], []
     for p in assets.visual_meshes:
         name = f"board_{p.stem}"
         assets_xml.append(f'<mesh name="{name}" file="{p.name}"/>')
-        geoms.append(f'<geom type="mesh" mesh="{name}" group="1" contype="0" conaffinity="0" rgba="0.82 0.72 0.55 1"/>')
+        geoms.append(f'<geom type="mesh" mesh="{name}" material="board_wood" group="1" contype="0" conaffinity="0"/>')
     fr = " ".join(f"{v:g}" for v in friction)
     for p in assets.collision_meshes:
         name = f"board_col_{p.stem}"
@@ -179,7 +180,7 @@ def board_mjcf_fragment(assets, mass, friction):
         name = f"board_{p.stem}"
         assets_xml.append(
             f'<texture name="{name}" type="2d" file="{p.stem}.png"/>'
-            f'<material name="{name}" texture="{name}"/><mesh name="{name}" file="{p.name}"/>'
+            f'<material name="{name}" texture="{name}" specular="0"/><mesh name="{name}" file="{p.name}"/>'
         )
         geoms.append(f'<geom name="{name}" type="mesh" mesh="{name}" material="{name}" group="1" contype="0" conaffinity="0"/>')
     ixx, iyy, izz = _plate_inertia(mass, assets.extent_m)
