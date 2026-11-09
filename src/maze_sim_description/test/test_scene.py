@@ -108,3 +108,15 @@ def test_camera_resolution_and_offscreen_buffer(model, cfg):
     w, h = cfg.camera.resolution
     assert tuple(model.cam_resolution[model.camera("overhead_camera").id]) == (w, h)
     assert model.vis.global_.offwidth >= w and model.vis.global_.offheight >= h
+
+
+def test_board_units_must_match_meshes(cfg):
+    import dataclasses
+
+    from maze_sim_description.scene_builder import build_scene
+
+    from conftest import PKG
+
+    wrong = dataclasses.replace(cfg, board=dataclasses.replace(cfg.board, units="m"))  # meshes were built from mm
+    with pytest.raises(ValueError, match="board.units"):
+        build_scene(wrong, PKG / "meshes" / "board")

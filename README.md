@@ -79,7 +79,7 @@ ros2 launch maze_sim_bringup sim.launch.py
 
 The launch validates `sim.yaml` first and stops with a message naming the bad key. A few seconds after start, the sim runs one `/sim/reset` so the gripper is squeezing the handle and the ball sits at rest on a level board; `/sim/reset_done` (latched) says when that is done.
 
-**Speed.** Every 10 s the sim logs `real-time factor: <x.xx>` (sim time ÷ wall time). On the owner's machine (RTX 5070 Ti) with `viewer:=true camera:=true` it reads **1.00**. If your machine cannot keep up, sim time slows down evenly (no physics steps are skipped) and the log says by how much.
+**Speed.** Every 10 s the sim logs `real-time factor: <x.xx>` (sim time ÷ wall time). On the owner's machine (RTX 5070 Ti) with `viewer:=true camera:=true` it reads **1.00**. If your machine cannot keep up, sim time slows down evenly (no physics steps are skipped) and the log warns. Lab-style nodes that run on the wall clock then see the arm move less per second than on the robot; close other programs or launch with `camera:=false`.
 
 ### Interfaces
 
@@ -128,10 +128,11 @@ MuJoCo cannot read STEP, so export the board from CAD as STL:
 All parts in one shared frame: origin at the board center, z up. State the units. Then convert (inside `maze-sim`):
 
 ```bash
-build_board_assets <dir with the STLs> --units mm   # writes src/maze_sim_description/meshes/board
+build_board_assets <dir with the STLs> --units mm --out-dir src/maze_sim_description/meshes/board
+colcon build
 ```
 
-and rebuild. A board whose size is 1000× off for the stated units is refused with a message about units.
+The tool replaces every mesh in `--out-dir` and writes `board.json`, which lists the meshes the sim loads and the units they came from. Set `board.units` in `sim.yaml` to the same units: the launch refuses a mismatch, and refuses a board whose size is 1000× off, both with a message about `board.units`.
 
 ### `sim.yaml` reference
 

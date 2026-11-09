@@ -1,0 +1,20 @@
+{
+  "units": "mm",
+  "visual": [
+    "visual_base.obj",
+    "visual_handle.obj",
+    "visual_wall_0.obj",
+    "visual_wall_1.obj"
+  ],
+  "collision": [
+    "base_000.obj",
+    "base_001.obj",
+    "base_002.obj",
+    "base_003.obj",
+    "base_004.obj",
+    "base_005.obj",
+    "handle_000.obj",
+    "wall_0.obj",
+    "wall_1.obj"
+  ]
+}

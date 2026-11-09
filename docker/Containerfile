@@ -30,6 +30,11 @@ RUN pip3 install --no-cache-dir \
         shapely==2.0.6 \
         mapbox_earcut==1.0.2
 
+# Fail here, not in a confusing test later, if apt moved the plugin or its MuJoCo away from the
+# versions the sim was tested with (apt versions cannot be pinned: old builds leave the repo).
+COPY docker/check_versions.py /tmp/check_versions.py
+RUN python3 /tmp/check_versions.py && rm /tmp/check_versions.py
+
 # Whatever the workspace's package.xml files declare (rosdep keys -> apt), so a new dependency
 # only needs adding there.
 COPY src/maze_sim_description/package.xml /tmp/ws/src/maze_sim_description/package.xml

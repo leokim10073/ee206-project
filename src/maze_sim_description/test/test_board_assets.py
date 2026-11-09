@@ -53,3 +53,57 @@ def test_load_matches_build(placeholder_mm, tmp_path):
     assert sorted(loaded.visual_meshes) == sorted(built.visual_meshes)
     assert loaded.extent_m == pytest.approx(built.extent_m)
     assert loaded.handle_center_m == pytest.approx(built.handle_center_m, abs=1e-9)
+
+
+def test_rebuild_removes_old_pieces(placeholder_mm, tmp_path):
+    # a previous board split into more pieces / had more walls than the new one
+    from maze_sim_description.board_assets import load_board_assets
+
+    out = tmp_path / "out"
+    build_board_assets(placeholder_mm, out, units="mm")
+    for stale in ("base_009.obj", "wall_7.obj", "visual_wall_7.obj"):
+        (out / "base_000.obj").rename(out / stale) if stale == "base_009.obj" else (out / stale).write_text("")
+    build_board_assets(placeholder_mm, out, units="mm")
+    loaded = load_board_assets(out)
+    names = {p.name for p in loaded.collision_meshes + loaded.visual_meshes}
+    assert not {"base_009.obj", "wall_7.obj", "visual_wall_7.obj"} & names
+    assert not any((out / n).exists() for n in ("base_009.obj", "wall_7.obj", "visual_wall_7.obj"))
+
+
+def test_load_refuses_units_other_than_config(placeholder_mm, tmp_path):
+    from maze_sim_description.board_assets import load_board_assets
+
+    build_board_assets(placeholder_mm, tmp_path / "out", units="mm")
+    with pytest.raises(ValueError, match="board.units"):
+        load_board_assets(tmp_path / "out", units="m")
+
+
+def test_load_refuses_wrong_size(placeholder_mm, tmp_path):
+    from maze_sim_description.board_assets import load_board_assets
+
+    out = tmp_path / "out"
+    build_board_assets(placeholder_mm, out, units="mm")
+    base = trimesh.load(out / "visual_base.obj", force="mesh")
+    base.apply_scale(1000.0)  # meshes copied in from an export that skipped the mm -> m scale
+    base.export(out / "visual_base.obj")
+    with pytest.raises(ValueError, match="board.units"):
+        load_board_assets(out)
+
+
+def test_load_needs_manifest(placeholder_mm, tmp_path):
+    from maze_sim_description.board_assets import load_board_assets
+
+    out = tmp_path / "out"
+    build_board_assets(placeholder_mm, out, units="mm")
+    (out / "board.json").unlink()
+    with pytest.raises(FileNotFoundError, match="build_board_assets"):
+        load_board_assets(out)
+
+
+def test_cli_requires_out_dir(placeholder_mm, monkeypatch):
+    # an installed console script has no reliable path back to src/, so the output is explicit
+    from maze_sim_description import board_assets
+
+    monkeypatch.setattr("sys.argv", ["build_board_assets", str(placeholder_mm), "--units", "mm"])
+    with pytest.raises(SystemExit):
+        board_assets.main()

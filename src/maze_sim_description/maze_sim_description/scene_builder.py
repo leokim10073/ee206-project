@@ -215,7 +215,7 @@ def _start_keyframe(model, cfg, board):
 
 
 def _scene_spec(cfg, board_dir):
-    board = load_board_assets(board_dir)
+    board = load_board_assets(board_dir, units=cfg.board.units)
     spec = _compose(cfg, board)
     model = spec.compile()
     qpos, ctrl = _start_keyframe(model, cfg, board)

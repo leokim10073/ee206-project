@@ -3,9 +3,14 @@
 Input (spec section 6): base.stl, handle.stl and wall_*.stl in one frame, origin at the
 board center, z up. Walls are boxes, so each is one convex hull. The base (with holes) and
 the handle are split into convex pieces with CoACD so holes stay open.
+
+Output: the meshes plus board.json, which lists them and records the STL units. The output
+directory belongs to this tool: every *.obj in it is replaced on each run, so pieces of an
+earlier board never linger as invisible collision geometry.
 """
 
 import argparse
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +21,7 @@ import trimesh
 UNIT_SCALE = {"mm": 0.001, "m": 1.0}
 EXTENT_RANGE_M = (0.2, 1.0)
 COACD_THRESHOLD = 0.02
+MANIFEST = "board.json"
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,14 @@ def _decompose(mesh, prefix, out_dir):
     return paths
 
 
+def _check_extent(extent, units, where):
+    if not EXTENT_RANGE_M[0] <= max(extent) <= EXTENT_RANGE_M[1]:
+        raise ValueError(
+            f"board.units: {where} is {max(extent):.3g} m across with units={units!r}; "
+            f"expected {EXTENT_RANGE_M[0]}–{EXTENT_RANGE_M[1]} m. Check the STL export units."
+        )
+
+
 def build_board_assets(src_dir, out_dir, units):
     src_dir, out_dir = Path(src_dir), Path(out_dir)
     if units not in UNIT_SCALE:
@@ -55,14 +69,12 @@ def build_board_assets(src_dir, out_dir, units):
 
     base = _load(src_dir / "base.stl", scale)
     extent = tuple(float(x) for x in base.extents)
-    if not EXTENT_RANGE_M[0] <= max(extent) <= EXTENT_RANGE_M[1]:
-        raise ValueError(
-            f"board.units: base is {max(extent):.3g} m across with units={units!r}; "
-            f"expected {EXTENT_RANGE_M[0]}–{EXTENT_RANGE_M[1]} m. Check the STL export units."
-        )
+    _check_extent(extent, units, "base")
     handle = _load(src_dir / "handle.stl", scale)
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    for old in [*out_dir.glob("*.obj"), out_dir / MANIFEST]:
+        old.unlink(missing_ok=True)
     visual, collision = [], []
     for name, mesh in [("base", base), ("handle", handle)]:
         p = out_dir / f"visual_{name}.obj"
@@ -78,6 +90,8 @@ def build_board_assets(src_dir, out_dir, units):
         mesh.convex_hull.export(hull)
         collision.append(hull)
 
+    manifest = {"units": units, "visual": [p.name for p in visual], "collision": [p.name for p in collision]}
+    (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n")
     return BoardAssets(
         visual_meshes=visual,
         collision_meshes=collision,
@@ -86,20 +100,32 @@ def build_board_assets(src_dir, out_dir, units):
     )
 
 
-def load_board_assets(mesh_dir):
-    """BoardAssets for a directory that build_board_assets already wrote."""
+def load_board_assets(mesh_dir, units=None):
+    """BoardAssets for a directory that build_board_assets already wrote: only the meshes its
+    board.json lists. `units` (sim.yaml board.units), if given, must match the units the meshes
+    were built from."""
     mesh_dir = Path(mesh_dir)
-    visual = sorted(mesh_dir.glob("visual_*.obj"))
-    collision = sorted(p for p in mesh_dir.glob("*.obj") if not p.name.startswith("visual_"))
-    for required in ("visual_base.obj", "visual_handle.obj"):
-        if not (mesh_dir / required).exists():
-            raise FileNotFoundError(f"{mesh_dir / required} is missing; run build_board_assets first")
+    if not (mesh_dir / MANIFEST).exists():
+        raise FileNotFoundError(f"{mesh_dir / MANIFEST} is missing; run build_board_assets first")
+    manifest = json.loads((mesh_dir / MANIFEST).read_text())
+    if units is not None and units != manifest["units"]:
+        raise ValueError(
+            f"board.units: sim.yaml says {units!r} but the meshes in {mesh_dir} were built from "
+            f"{manifest['units']!r} STLs; rerun build_board_assets with --units {units}"
+        )
+    visual = [mesh_dir / n for n in manifest["visual"]]
+    collision = [mesh_dir / n for n in manifest["collision"]]
+    for p in visual + collision:
+        if not p.exists():
+            raise FileNotFoundError(f"{p} is listed in {MANIFEST} but missing; rerun build_board_assets")
     base = trimesh.load(mesh_dir / "visual_base.obj", force="mesh")
     handle = trimesh.load(mesh_dir / "visual_handle.obj", force="mesh")
+    extent = tuple(float(x) for x in base.extents)
+    _check_extent(extent, manifest["units"], f"the base in {mesh_dir}")
     return BoardAssets(
         visual_meshes=visual,
         collision_meshes=collision,
-        extent_m=tuple(float(x) for x in base.extents),
+        extent_m=extent,
         handle_center_m=tuple(float(x) for x in handle.bounds.mean(axis=0)),
     )
 
@@ -135,7 +161,8 @@ def main():
     p = argparse.ArgumentParser(description="Convert board STL parts into MuJoCo meshes.")
     p.add_argument("src_dir", help="directory with base.stl, handle.stl, wall_*.stl")
     p.add_argument("--units", required=True, choices=sorted(UNIT_SCALE))
-    p.add_argument("--out-dir", default=str(Path(__file__).resolve().parents[1] / "meshes" / "board"))
+    p.add_argument("--out-dir", required=True,
+                   help="where the meshes go, e.g. src/maze_sim_description/meshes/board (then colcon build)")
     a = p.parse_args()
     assets = build_board_assets(a.src_dir, a.out_dir, a.units)
     print(f"{len(assets.visual_meshes)} visual, {len(assets.collision_meshes)} collision meshes → {a.out_dir}")

@@ -121,9 +121,8 @@ class SimTools(Node):
         last, self.rtf_mark = self.rtf_mark, mark
         if last is None or mark[0] <= last[0]:  # first tick, or sim time not running yet
             return
-        rtf = (mark[0] - last[0]) / (mark[1] - last[1])
-        log = self.get_logger().info if rtf >= 0.95 else self.get_logger().warn
-        log(f"real-time factor: {rtf:.2f}")
+        level, text = rtf_message((mark[0] - last[0]) / (mark[1] - last[1]), self.cfg.physics.real_time_factor)
+        getattr(self.get_logger(), level)(text)
 
     # reset ---------------------------------------------------------------------------------
 
@@ -238,6 +237,18 @@ class SimTools(Node):
         )
         if not self._call(self.switch_cli, req).ok:
             raise RuntimeError(f"switch_controllers failed (activate {activate}, deactivate {deactivate})")
+
+
+def rtf_message(rtf, target):
+    """Log level and text for a measured real-time factor against physics.real_time_factor."""
+    text = f"real-time factor: {rtf:.2f}"
+    if rtf >= 0.95 * target:
+        return "info", text
+    return "warn", (
+        f"{text} (target {target:.2f}): sim time runs slower than asked. Nodes on the wall clock, "
+        "as lab code is, see the arm move less per second than on the robot; close other programs "
+        "or launch with camera:=false"
+    )
 
 
 def _quat_matrix(w, x, y, z):
