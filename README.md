@@ -52,6 +52,10 @@ distrobox rm -f maze-sim && ./docker/build.sh && distrobox assemble create --fil
 
 A MuJoCo scene of the lab UR7e holding the maze board with its Robotiq 2F-85, plus an overhead camera, behind the same ROS 2 interface as the real robot. Lab code switches between sim and robot by changing the launch file, not the code. The design is in [`docs/superpowers/specs/2026-11-08-simulation-s1-design.md`](docs/superpowers/specs/2026-11-08-simulation-s1-design.md).
 
+![The UR7e holding the placeholder maze board at the start pose](docs/media/sim.png)
+
+*The start pose after the automatic reset, rendered from the sim's own MuJoCo scene. The board is a placeholder until the CAD export (below) arrives.*
+
 ### Prerequisites
 
 Nothing is installed on your machine except `podman` and `distrobox`. ROS 2 Humble, MuJoCo, `mujoco_ros2_control` and every Python package live in the `maze-sim` container. distrobox shares your home directory, so the container sets `PYTHONNOUSERSITE=1` and never touches your dotfiles. An NVIDIA GPU is used for the camera if present. `distrobox enter` reads your `~/.bashrc`, so an `RMW_IMPLEMENTATION` set there applies inside too; the image has both Fast DDS (the Humble default) and Cyclone DDS, and the tests pass on both. Use the same one as the robot's computer.
@@ -61,6 +65,16 @@ Nothing is installed on your machine except `podman` and `distrobox`. ROS 2 Humb
 distrobox assemble create --file docker/distrobox.ini     # create the maze-sim container
 distrobox enter maze-sim
 ```
+
+After the image changes (a `git pull` that touches `docker/`), rebuild it and recreate the container; an existing container keeps the old image:
+
+```bash
+./docker/build.sh
+distrobox rm -f maze-sim
+distrobox assemble create --file docker/distrobox.ini
+```
+
+The prompt looks the same inside and outside the container, because distrobox keeps your hostname and `~/.bashrc`. `echo ${CONTAINER_ID:-host}` prints `maze-sim` inside. Running `distrobox enter` again from inside fails with "we need a container manager".
 
 ### Build and run (inside `maze-sim`)
 
@@ -80,6 +94,45 @@ ros2 launch maze_sim_bringup sim.launch.py
 The launch validates `sim.yaml` first and stops with a message naming the bad key. A few seconds after start, the sim runs one `/sim/reset` so the gripper is squeezing the handle and the ball sits at rest on a level board; `/sim/reset_done` (latched) says when that is done.
 
 **Speed.** Every 10 s the sim logs `real-time factor: <x.xx>` (sim time ÷ wall time). On the owner's machine (RTX 5070 Ti) with `viewer:=true camera:=true` it reads **1.00**. If your machine cannot keep up, sim time slows down evenly (no physics steps are skipped) and the log warns. Lab-style nodes that run on the wall clock then see the arm move less per second than on the robot; close other programs or launch with `camera:=false`.
+
+### Try it
+
+Leave the launch running and open a second terminal on the host. Every terminal that talks to the sim needs the same `RMW_IMPLEMENTATION` and `ROS_DOMAIN_ID` as the one running it, which holds when both come from your `~/.bashrc`.
+
+```bash
+distrobox enter maze-sim
+cd <repo> && source install/setup.bash
+```
+
+Overhead camera image:
+
+```bash
+ros2 run rqt_image_view rqt_image_view /camera/image_raw
+```
+
+Open the gripper (answers `opened`; the board falls), then put everything back (~1.5 s):
+
+```bash
+ros2 service call /toggle_gripper std_srvs/srv/Trigger
+ros2 service call /sim/reset std_srvs/srv/Trigger
+```
+
+Velocity control, as the lab does it: switch from the trajectory controller to the velocity controller, then stream joint velocities (rad/s, in `/joint_states` order). The last entry turns `wrist_3`, which tilts the board about its x axis, so the ball rolls. Ctrl-C stops publishing and the arm stops.
+
+```bash
+ros2 control switch_controllers --deactivate scaled_joint_trajectory_controller --activate forward_velocity_controller
+ros2 topic pub -r 50 /forward_velocity_controller/commands std_msgs/msg/Float64MultiArray "{data: [0, 0, 0, 0, 0, 0.1]}"
+```
+
+![wrist_3 velocity commands tilt the board one way, then back; the ball rolls about 15 cm and stops](docs/media/velocity_control.gif)
+
+*Recorded from the sim through ROS: `wrist_3` at −0.1 rad/s for 0.5 s, +0.1 rad/s for 1 s, −0.1 rad/s for 0.5 s (a 3° tilt each way). Rendered from the recorded joint and pose topics with the sim's MuJoCo scene.*
+
+Back to the trajectory controller (lab 3 and lab 7 use it):
+
+```bash
+ros2 control switch_controllers --deactivate forward_velocity_controller --activate scaled_joint_trajectory_controller
+```
 
 ### Interfaces
 
