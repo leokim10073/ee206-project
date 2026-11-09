@@ -11,7 +11,7 @@ camera:
 
 robot:
   ur_type: ur7e
-  initial_joints: [-2.7502, -1.7210, -2.2471, 0.8835, 1.1847, -1.5917]   # rad; tool0 at (0.45, 0, 0.40) pointing +x, wrist pitched so the board settles level in the grasp; replaced by the real home pose
+  initial_joints: [-2.7498, -1.6799, -2.2485, 0.7868, 1.1837, -1.5708]   # rad; holds the board level with its handle at (0.60, 0, 0.41); replaced by the real home pose
 
 gripper:
   closed_position: 0.8               # fraction of full close at which fingers meet the handle
@@ -25,12 +25,12 @@ board:
     rpy: [3.141593, -1.570796, 0.0]   # board x along the approach (tool0 z), board z along the finger closing axis (tool0 x)
   mass: 0.8                          # kg
   surface_friction: [1.0, 0.005, 0.0001]   # sliding, torsional, rolling
-  goal_hole: {center: [0.20, 0.20], radius: 0.012}   # board frame, m
+  goal_hole: {center: [0.12, -0.072], radius: 0.015}   # board frame, m
 
 ball:
   radius: 0.007                      # m
   mass: 0.011                        # kg
-  start: [-0.20, -0.20]              # board frame, m
+  start: [-0.12, 0.12]               # board frame, m
   friction: [1.0, 0.005, 0.0001]
 
 physics:

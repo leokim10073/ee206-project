@@ -1,4 +1,5 @@
-"""/toggle_gripper opens and closes the 2F-85 as in lab 5; opening drops the board, /sim/reset regrasps it."""
+"""/toggle_gripper opens and closes the 2F-85 as in lab 5; the closed gripper holds the board while the arm
+moves; opening drops it, /sim/reset regrasps it."""
 
 import unittest
 
@@ -10,8 +11,9 @@ from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Empty
 from std_srvs.srv import Trigger
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-from sim_helpers import UR_JOINTS, pose_matrix, sim_launch_description, spin_until, stamp, wait_for_startup
+from sim_helpers import UR_JOINTS, default_config, pose_matrix, sim_launch_description, spin_until, stamp, wait_for_startup
 
 
 @pytest.mark.launch_test
@@ -72,6 +74,27 @@ class TestGripper(unittest.TestCase):
         return np.linalg.inv(pose_matrix(tool0)) @ pose_matrix(self.board[-1].pose)
 
     # tests (unittest runs them in name order; they share one running sim) -------------------
+
+    def test_0_grasp_holds_while_arm_moves(self):
+        # GraspWeldPlugin holds the board while the gripper is closed; on contacts alone it
+        # creeps ~0.014°/s under this motion (0.3° over the run)
+        q0 = np.array(default_config().robot.initial_joints)
+        traj = JointTrajectory(joint_names=list(UR_JOINTS))
+        for k in range(1, 81):  # 20 s of 0.1 rad, 0.1 Hz on every joint, ending back at q0
+            t = 0.25 * k
+            pt = JointTrajectoryPoint(positions=list(q0 + 0.1 * np.sin(2 * np.pi * 0.1 * t)))
+            pt.time_from_start.sec, pt.time_from_start.nanosec = int(t), int(round(t % 1 * 1e9))
+            traj.points.append(pt)
+        pub = self.node.create_publisher(JointTrajectory, "/scaled_joint_trajectory_controller/joint_trajectory", 10)
+        spin_until(self.node, lambda: pub.get_subscription_count() > 0, 10.0)
+        start = self.board_in_tool0()
+        pub.publish(traj)
+        self.wait_sim(21.0)
+        end = self.board_in_tool0()
+        self.node.destroy_publisher(pub)
+        self.assertLess(np.linalg.norm(end[:3, 3] - start[:3, 3]), 3e-4, "board slid in the grasp")
+        cos = (np.trace(start[:3, :3].T @ end[:3, :3]) - 1) / 2
+        self.assertGreater(cos, np.cos(np.radians(0.1)), f"board turned {np.degrees(np.arccos(min(cos, 1))):.2f}° in the grasp")
 
     def test_1_toggle_reports_state(self):
         self.assertEqual(self.toggle(), "opened")

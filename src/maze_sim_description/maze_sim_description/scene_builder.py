@@ -34,6 +34,14 @@ GRIPPER_KV = 10.0
 # Tendon force (N m on the driver joints) per newton of finger normal force on the handle;
 # checked by test_physics.test_finger_force_matches_limit.
 GRIPPER_TENDON_PER_NEWTON = 0.114
+# MuJoCo's soft friction lets a board held only by contacts creep in the grasp (~0.01°/s under
+# arm motion, whatever the friction or finger force). While the gripper is closed on the board,
+# GraspWeldPlugin (maze_sim_nodes) switches this weld on; opening switches it off, so a release
+# is still contacts and gravity. The rule is grasp_weld_engaged, mirrored in the plugin, which
+# reads the tolerances and the gripper actuator from the model (<numeric>/<text> "grasp_weld").
+GRASP_WELD = "grasp_weld"
+GRASP_WELD_POS_TOL = 0.005  # m: engage only for a board this close to its grasp pose...
+GRASP_WELD_ANG_TOL_DEG = 3.0  # ...and this close in angle, so a dropped board is never pulled back
 SETTLE_S = 0.5  # pre-simulation that closes the fingers on the handle (board pinned)
 LOAD_SETTLE_S = 1.0  # then the board hangs in the grasp under its own weight
 
@@ -48,9 +56,11 @@ def _menagerie_dir():
 
 
 def _absolute_meshes(spec, mesh_dir):
-    for mesh in spec.meshes:
-        mesh.file = str(Path(mesh_dir).resolve() / mesh.file)
-    spec.meshdir = ""
+    """Mesh and texture files as absolute paths, so the scene can be written anywhere."""
+    for asset in [*spec.meshes, *spec.textures]:
+        if asset.file:
+            asset.file = str(Path(mesh_dir).resolve() / asset.file)
+    spec.meshdir = spec.texturedir = ""
 
 
 def _rpy_matrix(rpy):
@@ -66,6 +76,28 @@ def gripper_command(model, closed):
     """ctrl value that fully closes (force-limited) or fully opens the fingers."""
     lo, hi = model.actuator(GRIPPER_ACTUATOR).ctrlrange
     return float(hi if closed else lo)
+
+
+def grasp_weld_engaged(model, data, engaged):
+    """Whether the grasp weld should be on for the next step: the gripper is commanded closed,
+    and the weld is already on or the board sits within tolerance of its grasp pose."""
+    act = model.actuator(GRIPPER_ACTUATOR)
+    lo, hi = act.ctrlrange
+    if data.ctrl[act.id] <= (lo + hi) / 2:
+        return False
+    if engaged:
+        return True
+    tol = model.numeric(GRASP_WELD)
+    pos_tol, ang_tol_deg = model.numeric_data[tol.adr[0] : tol.adr[0] + 2]
+    weld = model.equality(GRASP_WELD)
+    rel = model.eq_data[weld.id]
+    R_w = data.xmat[weld.obj1id[0]].reshape(3, 3)
+    R_b = data.xmat[weld.obj2id[0]].reshape(3, 3)
+    p_err = R_w.T @ (data.xpos[weld.obj2id[0]] - data.xpos[weld.obj1id[0]]) - rel[3:6]
+    R_rel = np.zeros(9)
+    mujoco.mju_quat2Mat(R_rel, rel[6:10])
+    cos = (np.trace(R_rel.reshape(3, 3).T @ R_w.T @ R_b) - 1) / 2
+    return bool(np.linalg.norm(p_err) < pos_tol and cos > np.cos(np.radians(ang_tol_deg)))
 
 
 def _compose(cfg, board):
@@ -129,6 +161,14 @@ def _compose(cfg, board):
         if geom.meshname.startswith(BOARD_PREFIX):
             geom.meshname = geom.meshname[len(BOARD_PREFIX):]
 
+    spec.add_equality(
+        name=GRASP_WELD, type=mujoco.mjtEq.mjEQ_WELD, objtype=mujoco.mjtObj.mjOBJ_BODY,
+        name1="wrist_3_link", name2="board", active=False,
+        solref=[2 * cfg.physics.timestep, 1.0],  # stiffest stable: the default gives way ~5 mm to the fingers' squeeze
+    )  # its target pose is set in _scene_spec, once the arm's start pose is known
+    spec.add_numeric(name=GRASP_WELD, data=[GRASP_WELD_POS_TOL, GRASP_WELD_ANG_TOL_DEG])
+    spec.add_text(name=GRASP_WELD + "_actuator", data=GRIPPER_ACTUATOR)
+
     ball_cls = spec.add_default("ball", spec.default)
     ball_cls.geom.friction = cfg.ball.friction
     ball_cls.geom.condim = 6
@@ -165,6 +205,17 @@ def _handle_target(data, cfg):
     return data.site("tool0").xpos + R_t @ np.asarray(cfg.board.grasp_offset.xyz), R_t @ _rpy_matrix(cfg.board.grasp_offset.rpy)
 
 
+def _grasp_relpose(model, cfg, handle):
+    """The board's pose in the wrist_3_link frame with its handle exactly at grasp_offset."""
+    data = mujoco.MjData(model)
+    data.qpos[[model.joint(j).qposadr[0] for j in UR_JOINTS]] = cfg.robot.initial_joints
+    mujoco.mj_kinematics(model, data)
+    p_h, R_h = _handle_target(data, cfg)
+    R_w = data.body("wrist_3_link").xmat.reshape(3, 3)
+    p_b = p_h - R_h @ handle
+    return np.concatenate([R_w.T @ (p_b - data.body("wrist_3_link").xpos), matrix_to_quat(R_w.T @ R_h)])
+
+
 def _grasp_and_settle(model, cfg, handle, p_h, R_h):
     """Pin the board with its handle at (p_h, R_h), close the fingers on it, then let the board
     hang in the grasp under its weight. Arm held at initial_joints, ball parked away."""
@@ -188,9 +239,11 @@ def _grasp_and_settle(model, cfg, handle, p_h, R_h):
             data.qpos[b_adr : b_adr + 7] = board_q
             data.qvel[b_dof : b_dof + 6] = 0
 
+    weld = model.equality(GRASP_WELD).id
     for pin_board, seconds in ((True, SETTLE_S), (False, LOAD_SETTLE_S)):
         for _ in range(int(round(seconds / model.opt.timestep))):
             hold(pin_board)
+            data.eq_active[weld] = grasp_weld_engaged(model, data, bool(data.eq_active[weld]))
             mujoco.mj_step(model, data)
     hold(False)
     data.qvel[:] = 0
@@ -200,9 +253,8 @@ def _grasp_and_settle(model, cfg, handle, p_h, R_h):
 
 def _start_keyframe(model, cfg, board):
     """Arm at initial_joints, fingers closed on the handle with the board pinned at grasp_offset,
-    then the board settled in the grasp under its weight (the fingers give a few degrees; the
-    default initial_joints are chosen so the settled board is level), ball resting at ball.start
-    on the board surface."""
+    then the board settled in the grasp under its weight with the grasp weld on (so it stays at
+    grasp_offset), ball resting at ball.start on the board surface."""
     handle = np.asarray(board.handle_center_m)
     data = mujoco.MjData(model)
     data.qpos[[model.joint(j).qposadr[0] for j in UR_JOINTS]] = cfg.robot.initial_joints
@@ -218,6 +270,9 @@ def _scene_spec(cfg, board_dir):
     board = load_board_assets(board_dir, units=cfg.board.units)
     spec = _compose(cfg, board)
     model = spec.compile()
+    weld_data = [0.0, 0.0, 0.0, *_grasp_relpose(model, cfg, np.asarray(board.handle_center_m)), 1.0]
+    next(e for e in spec.equalities if e.name == GRASP_WELD).data = weld_data
+    model.eq_data[model.equality(GRASP_WELD).id] = weld_data
     qpos, ctrl = _start_keyframe(model, cfg, board)
     spec.add_key(name="start", qpos=qpos, ctrl=ctrl)
     return spec

@@ -107,3 +107,63 @@ def test_cli_requires_out_dir(placeholder_mm, monkeypatch):
     monkeypatch.setattr("sys.argv", ["build_board_assets", str(placeholder_mm), "--units", "mm"])
     with pytest.raises(SystemExit):
         board_assets.main()
+
+
+def _add_marker(src, corner, x0, y0):
+    """One textured 50 x 50 x 0.1 mm sticker slab, like the CAD export's aruco/aruco_<corner>.obj."""
+    from PIL import Image
+
+    d = src / "aruco"
+    d.mkdir(exist_ok=True)
+    x1, y1 = x0 + 50, y0 + 50
+    v = [(x0, y0, 0.1), (x1, y0, 0.1), (x1, y1, 0.1), (x0, y1, 0.1), (x0, y0, 0), (x1, y0, 0), (x1, y1, 0), (x0, y1, 0)]
+    lines = [f"v {x} {y} {z}" for x, y, z in v] + ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1"]
+    faces = [(1, 2, 3), (1, 3, 4), (5, 7, 6), (5, 8, 7), (5, 6, 2), (5, 2, 1), (6, 7, 3), (6, 3, 2),
+             (7, 8, 4), (7, 4, 3), (8, 5, 1), (8, 1, 4)]
+    lines += ["f " + " ".join(f"{i}/{(i - 1) % 4 + 1}" for i in f) for f in faces]
+    (d / f"aruco_{corner}.obj").write_text("\n".join(lines) + "\n")
+    Image.new("RGB", (8, 8), (0, 0, 0)).save(d / f"aruco_{corner}.png")
+
+
+def test_markers_copied_in_metres(placeholder_mm, tmp_path):
+    from maze_sim_description.board_assets import load_board_assets
+
+    _add_marker(placeholder_mm, "TL", -240, 180)
+    out = tmp_path / "out"
+    built = build_board_assets(placeholder_mm, out, units="mm")
+    assert [p.name for p in built.markers] == ["aruco_TL.obj"]
+    assert (out / "aruco_TL.png").exists()
+    bounds = trimesh.load(out / "aruco_TL.obj", force="mesh").bounds
+    assert bounds.ravel() == pytest.approx([-0.240, 0.180, 0.0, -0.190, 0.230, 0.0001], abs=1e-9)
+    assert load_board_assets(out).markers == built.markers
+
+
+def test_board_without_markers(placeholder_mm, tmp_path):
+    from maze_sim_description.board_assets import load_board_assets
+
+    assert build_board_assets(placeholder_mm, tmp_path / "out", units="mm").markers == []
+    assert load_board_assets(tmp_path / "out").markers == []
+
+
+def test_rebuild_drops_old_markers(placeholder_mm, tmp_path):
+    out = tmp_path / "out"
+    _add_marker(placeholder_mm, "TL", -240, 180)
+    build_board_assets(placeholder_mm, out, units="mm")
+    import shutil
+
+    shutil.rmtree(placeholder_mm / "aruco")
+    assert build_board_assets(placeholder_mm, out, units="mm").markers == []
+    assert not list(out.glob("aruco_*"))
+
+
+def test_markers_are_textured_and_contact_free(placeholder_mm, tmp_path):
+    _add_marker(placeholder_mm, "TL", -240, 180)
+    out = tmp_path / "out"
+    a = build_board_assets(placeholder_mm, out, units="mm")
+    frag = board_mjcf_fragment(a, mass=0.8, friction=(1.0, 0.005, 0.0001))
+    m = mujoco.MjModel.from_xml_string(wrap_minimal_model(frag, meshdir=out).replace(
+        "<compiler ", f'<compiler texturedir="{out}" '))
+    g = m.geom("board_aruco_TL")
+    assert (g.contype[0], g.conaffinity[0], g.group[0]) == (0, 0, 1)
+    assert m.mat_texid[g.matid[0]][int(mujoco.mjtTextureRole.mjTEXROLE_RGB)] >= 0
+    assert m.body("board").mass[0] == pytest.approx(0.8)

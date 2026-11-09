@@ -141,6 +141,11 @@ class TestCamera(unittest.TestCase):
         u, v = int(round(u)), int(round(v))
         self.assertTrue(2 <= u < img.width - 40 and 2 <= v < img.height - 2, (u, v, p, self.board[-1].pose.position))
         patch = rgb[v - 2 : v + 3, u - 2 : u + 3].reshape(-1, 3).mean(axis=0)
-        board = rgb[v - 2 : v + 3, u + 30 : u + 35].reshape(-1, 3).mean(axis=0)
-        # board wood is (0.82, 0.72, 0.55); the ball is bluish grey (0.75, 0.75, 0.8)
-        self.assertGreater(patch[2] / max(patch[0], 1), board[2] / max(board[0], 1) + 0.15, (patch, board))
+        # bare floor 15 mm from the ball, inside its start cell (walls and stickers are nearby)
+        T = pose_matrix(self.board[-1].pose)
+        (fu, fv), _ = self._project((T @ [*self.cfg.ball.start[:1], self.cfg.ball.start[1] - 0.015, 0, 1])[:3])
+        fu, fv = int(round(fu)), int(round(fv))
+        board = rgb[fv - 2 : fv + 3, fu - 2 : fu + 3].reshape(-1, 3).mean(axis=0)
+        # board wood is (0.82, 0.72, 0.55); the ball is bluish grey (0.75, 0.75, 0.8). The lit floor
+        # clips red and green, so compare blue minus red rather than a ratio
+        self.assertGreater(patch[2] - patch[0], board[2] - board[0] + 20, (patch, board))

@@ -153,27 +153,30 @@ Things that differ from the robot, on purpose or by the simulator:
 
 - The camera publishes at 62.5 Hz (frames land on whole 2 ms physics steps). A slow subscriber of the 2.7 MB images can miss some (a Python subscriber gets ~56 Hz, less on a busy machine), because the publisher keeps only the newest frame. A GPU that cannot render a frame within its slot publishes fewer (an Intel Iris Xe gets ~55 Hz in sim time), and the sim logs `camera at <x> fps (sim time), below camera.fps`.
 - `camera_info` puts the principal point at (w/2, h/2), half a pixel off the ROS pixel-centre convention.
+- While the gripper is closed on the board, a weld holds the board in the grasp (`GraspWeldPlugin` in `maze_sim_nodes`). MuJoCo's friction is soft, so a board held by contacts alone creeps out of the grasp (about 0.014°/s while the arm moves, whatever the friction or finger force), where the real pads would not. The weld switches on only for a board within 5 mm and 3° of its grasp pose, and off as soon as the gripper opens, so dropping and regrasping still go through contacts and gravity. Held, the board still flexes up to ~0.6 mm / 0.2° against the fingers.
 - Physics and the controllers run on separate threads, so the same command sequence after `/sim/reset` gives the same ball path to within ~2 mm while the ball rolls free; after the ball hits walls, runs differ by up to ~1 cm, as on real hardware.
 
 ### Board export (Steven)
 
-MuJoCo cannot read STEP, so export the board from CAD as STL:
+MuJoCo cannot read STEP, so export the board from CAD as STL. `maze_CAD/scripts/export_sim.py --level <L>` does this and writes the parts to `maze_CAD/levels/<L>/sim/` (see [`maze_CAD/README.md`](maze_CAD/README.md)):
 
 | Part | File | Use in the sim |
 |---|---|---|
 | Base plate with holes | `base.stl` | Convex-decomposed (CoACD) so the holes stay open; also the visual |
 | Handle | `handle.stl` | Convex-decomposed; the fingers grip it |
 | Each wall | `wall_<n>.stl`, one per wall | Collides as its convex hull, so each wall must be one straight box: split an L-shaped or bent wall into straight pieces, or it fills its corner |
-| Goal hole | center and radius | Typed into `sim.yaml` (`board.goal_hole`) |
+| Shallow pocket (e.g. the goal) | a through hole in `base.stl` plus a convex `wall_<n>.stl` disk as its floor | CoACD fills a pocket that does not go through, and the ball rolls over it |
+| ArUco stickers (optional) | `aruco/aruco_<corner>.obj` + `.png` | Drawn with their texture, never collide |
+| Goal hole | center and radius | Typed into `sim.yaml` (`board.goal_hole`); `parts_report.json` has the values |
 
-All parts in one shared frame: origin at the board center, z up. State the units. Then convert (inside `maze-sim`):
+All parts in one shared frame: origin at the board center, z up, z = 0 on the maze floor (the plate's top face), so the ball spawns at z = ball radius. State the units. Then convert (inside `maze-sim`):
 
 ```bash
-build_board_assets <dir with the STLs> --units mm --out-dir src/maze_sim_description/meshes/board
+build_board_assets maze_CAD/levels/L1/sim --units mm --out-dir src/maze_sim_description/meshes/board
 colcon build
 ```
 
-The tool replaces every mesh in `--out-dir` and writes `board.json`, which lists the meshes the sim loads and the units they came from. Set `board.units` in `sim.yaml` to the same units: the launch refuses a mismatch, and refuses a board whose size is 1000× off, both with a message about `board.units`.
+The tool replaces every mesh and marker texture in `--out-dir` and writes `board.json`, which lists the meshes the sim loads and the units they came from. Set `board.units` in `sim.yaml` to the same units: the launch refuses a mismatch, and refuses a board whose size is 1000× off, both with a message about `board.units`.
 
 ### `sim.yaml` reference
 

@@ -2,7 +2,10 @@ import mujoco
 import numpy as np
 import pytest
 
-from maze_sim_description.scene_builder import GRIPPER_ACTUATOR, UR_JOINTS
+from maze_sim_description.scene_builder import (
+    GRASP_WELD, GRASP_WELD_ANG_TOL_DEG, GRASP_WELD_POS_TOL, GRIPPER_ACTUATOR, UR_JOINTS, grasp_weld_engaged,
+    gripper_command,
+)
 
 
 def _board_frame(data, p_world):
@@ -23,7 +26,6 @@ def test_compiles_with_names(model, cfg):
     assert model.opt.timestep == 0.002
     assert model.opt.cone == mujoco.mjtCone.mjCONE_ELLIPTIC
     assert model.opt.noslip_iterations == cfg.physics.noslip_iterations
-    assert not any(model.eq_type == mujoco.mjtEq.mjEQ_WELD)  # contact-only grasp
 
 
 def test_camera_pose_from_config(model, data, cfg):
@@ -120,3 +122,65 @@ def test_board_units_must_match_meshes(cfg):
     wrong = dataclasses.replace(cfg, board=dataclasses.replace(cfg.board, units="m"))  # meshes were built from mm
     with pytest.raises(ValueError, match="board.units"):
         build_scene(wrong, PKG / "meshes" / "board")
+
+
+def test_aruco_markers_on_board(model):
+    # the four corner stickers perception will look for: drawn on the board, never touched
+    names = sorted(model.geom(i).name for i in range(model.ngeom) if model.geom(i).name.startswith("board_aruco_"))
+    assert names == ["board_aruco_BL", "board_aruco_BR", "board_aruco_TL", "board_aruco_TR"]
+    for n in names:
+        g = model.geom(n)
+        assert model.body(g.bodyid[0]).name == "board"
+        assert (g.contype[0], g.conaffinity[0]) == (0, 0)
+        assert model.mat_texid[g.matid[0]][int(mujoco.mjtTextureRole.mjTEXROLE_RGB)] >= 0
+
+
+def test_grasp_weld_off_until_the_plugin_engages_it(model):
+    # MuJoCo's soft friction lets a held board creep; while the gripper is closed on it,
+    # GraspWeldPlugin switches this weld on (the rule is grasp_weld_engaged)
+    weld = model.equality(GRASP_WELD)
+    assert weld.type[0] == mujoco.mjtEq.mjEQ_WELD
+    assert model.body(weld.obj1id[0]).name == "wrist_3_link" and model.body(weld.obj2id[0]).name == "board"
+    assert not model.eq_active0[weld.id]
+    assert int(sum(model.eq_type == mujoco.mjtEq.mjEQ_WELD)) == 1
+    # what GraspWeldPlugin reads from the model: the tolerances and the gripper actuator
+    tol = model.numeric("grasp_weld")
+    assert list(model.numeric_data[tol.adr[0] : tol.adr[0] + tol.size[0]]) == [GRASP_WELD_POS_TOL, GRASP_WELD_ANG_TOL_DEG]
+    t = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TEXT, "grasp_weld_actuator")
+    adr, size = model.text_adr[t], model.text_size[t]
+    assert bytes(model.text_data[adr : adr + size - 1]).decode() == GRIPPER_ACTUATOR
+
+
+def test_grasp_weld_holds_board_at_grasp_offset(model, data, cfg):
+    # the weld's target is the board with its handle exactly at grasp_offset in tool0
+    from conftest import PKG
+    from maze_sim_description.board_assets import load_board_assets
+
+    handle = np.array(load_board_assets(PKG / "meshes" / "board").handle_center_m)
+    rel = model.eq_data[model.equality(GRASP_WELD).id]
+    R_w = data.body("wrist_3_link").xmat.reshape(3, 3)
+    p_w = data.body("wrist_3_link").xpos
+    R_rel = np.zeros(9)
+    mujoco.mju_quat2Mat(R_rel, rel[6:10])
+    p_board, R_board = p_w + R_w @ rel[3:6], R_w @ R_rel.reshape(3, 3)
+    R_t = data.site("tool0").xmat.reshape(3, 3)
+    h_tool = R_t.T @ (p_board + R_board @ handle - data.site("tool0").xpos)
+    assert np.allclose(h_tool, cfg.board.grasp_offset.xyz, atol=1e-6)
+
+
+def test_grasp_weld_rule(model, data):
+    open_cmd, closed_cmd = gripper_command(model, False), gripper_command(model, True)
+    act = model.actuator(GRIPPER_ACTUATOR).id
+    d = mujoco.MjData(model)
+    d.qpos[:], d.ctrl[:] = data.qpos, data.ctrl
+    mujoco.mj_forward(model, d)
+    d.ctrl[act] = closed_cmd
+    assert grasp_weld_engaged(model, d, engaged=False)  # closed, board in the grasp
+    d.ctrl[act] = open_cmd
+    assert not grasp_weld_engaged(model, d, engaged=True)  # opening always releases
+    d.ctrl[act] = closed_cmd
+    adr = model.joint("board_free").qposadr[0]
+    d.qpos[adr + 2] -= 0.02  # board 2 cm below the grasp, e.g. dropped and closing again
+    mujoco.mj_forward(model, d)
+    assert not grasp_weld_engaged(model, d, engaged=False)
+    assert grasp_weld_engaged(model, d, engaged=True)  # once on, it stays on while closed
