@@ -1,0 +1,25 @@
+# Perception settings. All keys are required.
+# Board frame = the sim's board frame (maze_CAD/README.md): origin at the plate center, z up,
+# z = 0 on the maze floor, handle on the -x edge, units m.
+
+aruco:
+  dictionary: DICT_4X4_50            # maze_CAD/scripts/maze_params.py -> ARUCO
+  marker_size: 0.040                 # black square side, m (the white quiet zone is not part of it)
+  # Marker centers in the board frame (maze_CAD/levels/<L>/sim/parts_report.json -> aruco.markers).
+  # Each marker's image top edge faces board +y. The same four markers go on every level.
+  markers:
+    0: [-0.121,  0.179, 0.0001]      # TL
+    1: [ 0.121,  0.179, 0.0001]      # TR
+    2: [ 0.121, -0.179, 0.0001]      # BR
+    3: [-0.121, -0.179, 0.0001]      # BL
+
+pose:
+  # Fewer markers than this -> no board pose for the frame. With 3 of the 4, points on the board are
+  # within 1 mm; with 2, the tilt is ambiguous (up to 7 deg, 6.6 mm off on a 5 deg tilted board).
+  min_markers: 3
+  max_reprojection_px: 3.0           # reject a pose whose worst corner reprojects farther than this
+
+rectified:
+  x_range: [-0.150, 0.150]           # board area drawn in the rectified image, m (the 300 x 300 plate)
+  y_range: [-0.150, 0.150]
+  px_per_m: 2000.0                   # 2 px/mm -> 600 x 600 image; image x = board +x, image up = board +y
