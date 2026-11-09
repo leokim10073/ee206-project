@@ -54,7 +54,7 @@ A MuJoCo scene of the lab UR7e holding the maze board with its Robotiq 2F-85, pl
 
 ### Prerequisites
 
-Nothing is installed on your machine except `podman` and `distrobox`. ROS 2 Humble, MuJoCo, `mujoco_ros2_control` and every Python package live in the `maze-sim` container. distrobox shares your home directory, so the container sets `PYTHONNOUSERSITE=1` and never touches your dotfiles. An NVIDIA GPU is used for the camera if present.
+Nothing is installed on your machine except `podman` and `distrobox`. ROS 2 Humble, MuJoCo, `mujoco_ros2_control` and every Python package live in the `maze-sim` container. distrobox shares your home directory, so the container sets `PYTHONNOUSERSITE=1` and never touches your dotfiles. An NVIDIA GPU is used for the camera if present. `distrobox enter` reads your `~/.bashrc`, so an `RMW_IMPLEMENTATION` set there applies inside too; the image has both Fast DDS (the Humble default) and Cyclone DDS, and the tests pass on both. Use the same one as the robot's computer.
 
 ```bash
 ./docker/build.sh                                         # build the image (once)

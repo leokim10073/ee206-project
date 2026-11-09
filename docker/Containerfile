@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-mujoco-ros2-control \
         ros-humble-mujoco-ros2-control-plugins \
         ros-humble-launch-testing-ament-cmake \
+        ros-humble-rmw-cyclonedds-cpp \
         python3-pip \
         python3-pytest \
         libegl1 \
