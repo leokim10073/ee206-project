@@ -1,6 +1,6 @@
-"""Sim-only helpers the MuJoCo plugin does not provide itself:
+"""Sim-only helpers the MuJoCo plugin does not provide itself (the ball and board poses are
+republished by the C++ pose_relay in maze_sim_nodes):
 
-- /sim/ball/pose, /sim/board/pose (PoseStamped in world) from the plugin's free-joint states
 - the static TF world -> camera_optical_frame from sim.yaml
 - /sim/reset (Trigger): arm controllers off, reset_world to keyframe "start", gripper closed,
   controllers back on with their reference at initial_joints, ball placed at rest on the board,
@@ -21,7 +21,7 @@ import rclpy
 from builtin_interfaces.msg import Duration
 from controller_manager_msgs.srv import ListControllers, SwitchController
 from geometry_msgs.msg import PoseStamped, TransformStamped
-from mujoco_ros2_control_msgs.msg import FreeJointState, FreeJointStateArray
+from mujoco_ros2_control_msgs.msg import FreeJointState
 from mujoco_ros2_control_msgs.srv import ResetWorld, SetFreeJointState
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.clock import Clock, ClockType
@@ -50,7 +50,7 @@ UR_JOINTS = ("shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_
 CALL_TIMEOUT_S = 10.0
 GRIPPER_LEAD_S = 0.05  # sim time for the close command to reach the finger actuator
 SETTLE_S = 1.0  # sim time for the arm to return to initial_joints after a reset (position PID settles in ~1 s)
-POSE_TOPICS = {"ball": "/sim/ball/pose", "board": "/sim/board/pose"}
+BOARD_POSE_TOPIC = "/sim/board/pose"
 RATE_WINDOW_S = 5.0
 
 
@@ -59,11 +59,7 @@ class SimTools(Node):
         super().__init__("sim_tools")
         self.cfg = load_sim_config(self.declare_parameter("config", "").value)
         self.camera = self.declare_parameter("camera", True).value
-        group = ReentrantCallbackGroup()
-
-        self.latest = {}
-        self.pose_pubs = {name: self.create_publisher(PoseStamped, topic, 10) for name, topic in POSE_TOPICS.items()}
-        self.create_subscription(FreeJointStateArray, "/sim/free_joint_states", self.on_free_joints, 10)
+        group = self.group = ReentrantCallbackGroup()
 
         c = self.cfg.camera
         tf = TransformStamped()
@@ -98,17 +94,6 @@ class SimTools(Node):
             # taking a second copy of the 2.7 MB image stream
             self.create_subscription(CameraInfo, "/camera/camera_info", self.on_frame, 10)
             self.create_timer(RATE_WINDOW_S, self.check_camera_rate, clock=wall)
-
-    # poses -------------------------------------------------------------------------------
-
-    def on_free_joints(self, msg):
-        for joint in msg.free_joints:
-            self.latest[joint.name] = joint.pose
-            pub = self.pose_pubs.get(joint.name)
-            if pub:
-                pose = joint.pose
-                pose.header.frame_id = "world"
-                pub.publish(pose)
 
     # camera rate ---------------------------------------------------------------------------
 
@@ -191,9 +176,7 @@ class SimTools(Node):
             time.sleep(0.01)
 
     def _place_ball(self):
-        board = self.latest.get("board")
-        if board is None:
-            raise RuntimeError("no board pose from the free-joint publisher")
+        board = self._board_pose()
         p, q = board.pose.position, board.pose.orientation
         R = _quat_matrix(q.w, q.x, q.y, q.z)
         ball = np.array([p.x, p.y, p.z]) + R @ np.array([*self.cfg.ball.start, self.cfg.ball.radius])
@@ -204,6 +187,23 @@ class SimTools(Node):
         result = self._call(self.ball_cli, SetFreeJointState.Request(free_joints=[state]))
         if not result.success:
             raise RuntimeError(f"set_free_joint_state failed: {result.message}")
+
+    def _board_pose(self, timeout=CALL_TIMEOUT_S):
+        """One fresh board pose. Subscribed only for the moment it is needed, so this node takes
+        no part in the 100 Hz pose stream."""
+        got, done = [], threading.Event()
+
+        def on_pose(msg):
+            got.append(msg)
+            done.set()
+
+        sub = self.create_subscription(PoseStamped, BOARD_POSE_TOPIC, on_pose, 1, callback_group=self.group)
+        try:
+            if not done.wait(timeout):
+                raise RuntimeError(f"no board pose on {BOARD_POSE_TOPIC} within {timeout} s")
+            return got[-1]
+        finally:
+            self.destroy_subscription(sub)
 
     def _call(self, client, request, timeout=CALL_TIMEOUT_S):
         done = threading.Event()

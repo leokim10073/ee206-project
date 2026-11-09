@@ -119,6 +119,7 @@ def _setup(context):
             arguments=[*INACTIVE, "--inactive", "--param-file", controllers],
             output="both",
         ),
+        Node(package="maze_sim_nodes", executable="pose_relay", output="both"),
         Node(
             package="maze_sim_bringup",
             executable="sim_tools",

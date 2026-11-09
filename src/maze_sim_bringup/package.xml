@@ -8,6 +8,7 @@
   <license>MIT</license>
 
   <exec_depend>maze_sim_description</exec_depend>
+  <exec_depend>maze_sim_nodes</exec_depend>
   <exec_depend>mujoco_ros2_control</exec_depend>
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>

@@ -33,7 +33,7 @@ def _refuse_leftover_sim():
     services and publishes a second /clock, and every test after it fails in odd ways."""
     import subprocess
 
-    found = subprocess.run(["pgrep", "-af", r"^(\S*/ros2_control_node|\S*python3 \S*/lib/maze_sim_bringup/(sim_tools|gripper)) "],
+    found = subprocess.run(["pgrep", "-af", r"^(\S*/ros2_control_node|\S*/lib/maze_sim_nodes/pose_relay|\S*python3 \S*/lib/maze_sim_bringup/(sim_tools|gripper)) "],
                            capture_output=True, text=True).stdout.strip()
     if found:
         raise RuntimeError(f"a simulation is already running; stop it first:\n{found}")
