@@ -56,9 +56,9 @@ distrobox rm -f maze-sim && ./docker/build.sh && distrobox assemble create --fil
 
 A MuJoCo scene of the lab UR7e holding the maze board with its Robotiq 2F-85, plus an overhead camera, behind the same ROS 2 interface as the real robot. Lab code switches between sim and robot by changing the launch file, not the code. The design is in [`docs/superpowers/specs/2026-11-08-simulation-s1-design.md`](docs/superpowers/specs/2026-11-08-simulation-s1-design.md).
 
-![The UR7e holding the placeholder maze board at the start pose](docs/media/sim.png)
+![The UR7e holding the L1 maze board at the start pose](docs/media/sim.png)
 
-*The start pose after the automatic reset, rendered from the sim's own MuJoCo scene. The board is a placeholder until the CAD export (below) arrives.*
+*The start pose after the automatic reset, rendered from the sim's own MuJoCo scene: the L1 maze, its four ArUco stickers and the ball in the start cell.*
 
 ### Prerequisites
 
@@ -112,7 +112,7 @@ ros2 control switch_controllers --deactivate scaled_joint_trajectory_controller 
 ros2 topic pub -r 50 /forward_velocity_controller/commands std_msgs/msg/Float64MultiArray "{data: [0, 0, 0, 0, 0, 0.1]}"
 ```
 
-![wrist_3 velocity commands tilt the board one way, then back; the ball rolls about 15 cm and stops](docs/media/velocity_control.gif)
+![wrist_3 velocity commands tilt the board one way, then back; the ball rolls about 7 cm in the L1 maze](docs/media/velocity_control.gif)
 
 *Recorded from the sim through ROS: `wrist_3` at −0.1 rad/s for 0.5 s, +0.1 rad/s for 1 s, −0.1 rad/s for 0.5 s (a 3° tilt each way). Rendered from the recorded joint and pose topics with the sim's MuJoCo scene.*
 
