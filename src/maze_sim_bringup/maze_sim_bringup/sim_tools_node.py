@@ -9,6 +9,7 @@ republished by the C++ pose_relay in maze_sim_nodes):
   fingers hold position without squeezing and the arm sags with its controllers inactive, so the
   start state is only clean after this first reset
 - a warning when the camera publishes below camera.fps
+- every 10 s, "real-time factor: <x.xx>" (sim time elapsed / wall time elapsed)
 """
 
 import sys
@@ -52,6 +53,7 @@ GRIPPER_LEAD_S = 0.05  # sim time for the close command to reach the finger actu
 SETTLE_S = 1.0  # sim time for the arm to return to initial_joints after a reset (position PID settles in ~1 s)
 BOARD_POSE_TOPIC = "/sim/board/pose"
 RATE_WINDOW_S = 5.0
+RTF_PERIOD_S = 10.0
 
 
 class SimTools(Node):
@@ -87,6 +89,8 @@ class SimTools(Node):
         # steady clock: a sim-time timer fires in a burst when /clock jumps at start-up
         wall = Clock(clock_type=ClockType.STEADY_TIME)
         self.startup_timer = self.create_timer(0.5, self.startup_reset, callback_group=group, clock=wall)
+        self.rtf_mark = None
+        self.create_timer(RTF_PERIOD_S, self.log_rtf, clock=wall)
 
         if self.camera:
             self.frames = []
@@ -109,6 +113,17 @@ class SimTools(Node):
         rate = (len(self.frames) - 1) / (self.frames[-1] - self.frames[0])
         if rate < 0.95 * self.cfg.camera.fps:
             self.get_logger().warn(f"camera at {rate:.1f} fps (sim time), below camera.fps {self.cfg.camera.fps}")
+
+    # real-time factor ----------------------------------------------------------------------
+
+    def log_rtf(self):
+        mark = (self.get_clock().now().nanoseconds * 1e-9, time.monotonic())
+        last, self.rtf_mark = self.rtf_mark, mark
+        if last is None or mark[0] <= last[0]:  # first tick, or sim time not running yet
+            return
+        rtf = (mark[0] - last[0]) / (mark[1] - last[1])
+        log = self.get_logger().info if rtf >= 0.95 else self.get_logger().warn
+        log(f"real-time factor: {rtf:.2f}")
 
     # reset ---------------------------------------------------------------------------------
 
