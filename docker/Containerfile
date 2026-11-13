@@ -46,6 +46,8 @@ COPY src/maze_sim_description/package.xml /tmp/ws/src/maze_sim_description/packa
 COPY src/maze_sim_bringup/package.xml /tmp/ws/src/maze_sim_bringup/package.xml
 COPY src/maze_sim_nodes/package.xml /tmp/ws/src/maze_sim_nodes/package.xml
 COPY src/maze_perception/package.xml /tmp/ws/src/maze_perception/package.xml
+COPY src/maze_interfaces/package.xml /tmp/ws/src/maze_interfaces/package.xml
+COPY src/maze_cad_map/package.xml /tmp/ws/src/maze_cad_map/package.xml
 RUN apt-get update \
     && rosdep update --rosdistro humble \
     && rosdep install --from-paths /tmp/ws/src --ignore-src --rosdistro humble -y \

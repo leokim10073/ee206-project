@@ -245,3 +245,25 @@ cd src/maze_perception && python3 -m pytest test
 ```
 
 `test_sim_render.py` renders the MuJoCo scene offline (no ROS) and compares against ground truth; `test_node.py` runs `board_tracker` over ROS on a synthetic image.
+
+## CAD maze map
+
+`maze_cad_map` publishes a level's maze map from `maze_CAD/scripts/levels.py` on `/maze/map` (contract 1 in [`docs/interfaces.md`](docs/interfaces.md)), and the walls alone on `/maze/map/walls` for RViz, so planning can run before perception maps the maze. It is also the answer key for perception's map. Work package: [#29](https://github.com/leokim10073/ee206-project/issues/29).
+
+Run it from the repo root, inside `maze-sim` (the default `cad_scripts` path is relative to it):
+
+```bash
+colcon build && source install/setup.bash
+ros2 launch maze_cad_map cad_map.launch.py            # level:=L1, use_sim_time:=false on the robot
+```
+
+The grid is 60 × 60 cells of 5 mm over the plate, in `maze_board`, row 0 on the −y edge; holes, start and goal are circles and points next to it. `maze_cad_map/cad_map.py` builds the map without ROS, for tests.
+
+### Tests (inside `maze-sim`)
+
+```bash
+colcon build && source install/setup.bash
+cd src/maze_cad_map && python3 -m pytest test
+```
+
+They check the walls, start and goal against the sim export (`parts_report.json`) and `sim.yaml`, and that a subscriber that starts late still receives the map.
